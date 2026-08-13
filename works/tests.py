@@ -48,6 +48,15 @@ class AppTestCase(TestCase):
     def post_json(self, url, payload):
         return self.client.post(url, data=json.dumps(payload), content_type="application/json")
 
+    def test_login_redirect_uses_namespaced_home_route(self):
+        self.client.logout()
+        response = self.client.post(
+            reverse("login"),
+            {"username": "aluno", "password": "senha-forte-123"},
+        )
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("works:home"))
+
     def test_all_workspace_parts_render(self):
         for slug in PARTS:
             with self.subTest(slug=slug):

@@ -113,7 +113,7 @@ STORAGES = {
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 LOGIN_URL = "login"
-LOGIN_REDIRECT_URL = "home"
+LOGIN_REDIRECT_URL = "works:home"
 LOGOUT_REDIRECT_URL = "login"
 
 DATA_UPLOAD_MAX_MEMORY_SIZE = 2 * 1024 * 1024
