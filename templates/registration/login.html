@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Entrar · Monografia SPN{% endblock %}
+{% block body_class %}auth-page{% endblock %}
+{% block content %}
+<main class="auth-shell">
+  <section class="auth-story" aria-labelledby="story-title">
+    <a class="brand brand--light" href="/">
+      <span class="brand__mark">SPN</span>
+      <span><strong>Monografia</strong><small>Seminário Presbiteriano do Norte</small></span>
+    </a>
+    <div class="auth-story__content">
+      <p class="eyebrow eyebrow--gold">Da pergunta à versão final</p>
+      <h1 id="story-title">Sua pesquisa teológica, conduzida com método.</h1>
+      <p>Planeje, escreva, revise e exporte sua monografia em um ambiente construído a partir do padrão acadêmico do SPN e das normas ABNT atuais.</p>
+      <div class="auth-proof">
+        <span>01</span>
+        <p><strong>Autoria preservada</strong>A IA orienta e sugere; a decisão continua sendo sua.</p>
+      </div>
+      <div class="auth-proof">
+        <span>02</span>
+        <p><strong>Progresso seguro</strong>Seu texto fica associado à sua conta e é salvo durante a escrita.</p>
+      </div>
+    </div>
+    <p class="auth-story__foot">IPB · JET · JURET/Recife · SPN</p>
+  </section>
+  <section class="auth-panel">
+    <div class="auth-card">
+      <p class="eyebrow">Acesso do aluno</p>
+      <h2>Continue sua monografia</h2>
+      <p class="muted">Entre para retomar exatamente de onde parou.</p>
+      {% if form.non_field_errors %}<div class="form-error">Usuário ou senha inválidos. Confira os dados e tente novamente.</div>{% endif %}
+      <form method="post" class="form-stack">
+        {% csrf_token %}
+        <label for="id_username">Nome de usuário</label>
+        <input id="id_username" name="username" type="text" autocomplete="username" autofocus required value="{{ form.username.value|default:'' }}">
+        <label for="id_password">Senha</label>
+        <input id="id_password" name="password" type="password" autocomplete="current-password" required>
+        {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+        <button class="button button--primary button--wide" type="submit">Entrar no ambiente <span aria-hidden="true">→</span></button>
+      </form>
+      <p class="auth-card__switch">Ainda não tem uma conta? <a href="{% url 'works:register' %}">Criar conta</a></p>
+    </div>
+  </section>
+</main>
+{% endblock %}
+

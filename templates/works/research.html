@@ -1,0 +1,16 @@
+{% extends "works/editor_base.html" %}
+{% block editor_content %}
+<section class="research-panel" data-research-root data-search-url="{% url 'works:research_search' work.pk %}" data-save-url="{% url 'works:save_publication' work.pk %}">
+  <form class="research-form" data-research-form>
+    <label for="research-query">Tema, autor, conceito ou obra</label>
+    <div class="research-searchbox"><span aria-hidden="true">⌕</span><input id="research-query" name="query" value="{{ initial_query }}" placeholder="Ex.: arrependimento na teologia reformada" required><button class="button button--primary" type="submit">Pesquisar</button></div>
+    <fieldset><legend>Recorte da busca</legend><label><input type="radio" name="mode" value="all" checked> Todas</label><label><input type="radio" name="mode" value="classic"> Clássicas e livros</label><label><input type="radio" name="mode" value="modern"> Recentes e acadêmicas</label></fieldset>
+  </form>
+  <div class="source-strip"><span>Fontes consultadas</span><strong>Crossref</strong><strong>OpenAlex</strong><strong>Google Books</strong><strong>Open Library</strong></div>
+  <div class="research-status" data-research-status>
+    <div class="research-empty"><span aria-hidden="true">⌕</span><h2>Pesquise em catálogos verificáveis</h2><p>Os resultados trazem links reais para a página da obra ou seu identificador. Pertinência e conteúdo devem ser conferidos por você.</p></div>
+  </div>
+  <div class="research-results" data-research-results></div>
+</section>
+{% endblock %}
+

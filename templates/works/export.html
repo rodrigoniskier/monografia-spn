@@ -1,0 +1,16 @@
+{% extends "works/editor_base.html" %}
+{% block editor_content %}
+<section class="export-layout">
+  <div class="export-card">
+    <div class="doc-preview" aria-hidden="true"><div class="doc-preview__page"><span>SPN</span><i></i><i></i><strong>{{ work.title|default:"TÍTULO DA MONOGRAFIA"|truncatechars:42 }}</strong><i></i><i></i><small>{{ work.author_name|default:"NOME DO AUTOR" }}</small></div></div>
+    <div class="export-card__copy"><span class="format-pill">DOCX · EDITÁVEL</span><h2>{{ work.display_title }}</h2><p>Formato A4, margens ABNT, Times New Roman, seções numeradas, elementos institucionais e sumário automático.</p><a class="button button--primary button--wide" href="{% url 'works:export_docx' work.pk %}">Baixar monografia em DOCX <span aria-hidden="true">↓</span></a><small>O arquivo é gerado no momento do download e não contém sua chave de IA.</small></div>
+  </div>
+  <aside class="final-checklist">
+    <p class="eyebrow">Conferência de conteúdo</p><h2>Antes de entregar</h2>
+    <ul>{% for check in export_checks %}<li class="{% if check.done %}is-done{% endif %}"><span>{% if check.done %}✓{% else %}!{% endif %}</span>{{ check.label }}</li>{% endfor %}</ul>
+    <div class="final-callout"><strong>Depois de baixar</strong><p>Abra no Word ou LibreOffice, atualize o sumário automático e faça uma última conferência de quebras, páginas e referências.</p></div>
+  </aside>
+</section>
+<section class="abnt-specs"><div><span>A4</span><p><strong>Papel e margens</strong>3 cm superior/esquerda · 2 cm inferior/direita</p></div><div><span>Aa</span><p><strong>Tipografia</strong>Times New Roman · corpo 12 · citações longas 10</p></div><div><span>1,5</span><p><strong>Entrelinhas</strong>Espaço 1,5 no corpo · simples nas exceções</p></div><div><span>§</span><p><strong>Organização</strong>Seções e subseções conforme a norma atual</p></div></section>
+{% endblock %}
+

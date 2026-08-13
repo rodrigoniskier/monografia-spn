@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Suas monografias · Monografia SPN{% endblock %}
+{% block body_class %}dashboard-page{% endblock %}
+{% block content %}
+<header class="site-header">
+  <a class="brand" href="{% url 'works:dashboard' %}"><span class="brand__mark">SPN</span><span><strong>Monografia</strong><small>Ambiente de escrita acadêmica</small></span></a>
+  <nav class="site-header__actions" aria-label="Conta">
+    <a class="text-button" href="{% url 'works:onboarding' %}">Como funciona</a>
+    <span class="user-chip"><span>{{ request.user.get_full_name|default:request.user.username|slice:":1" }}</span>{{ request.user.get_full_name|default:request.user.username }}</span>
+    <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="text-button" type="submit">Sair</button></form>
+  </nav>
+</header>
+<main class="dashboard-container">
+  <section class="dashboard-hero">
+    <div>
+      <p class="eyebrow">Área de trabalho</p>
+      <h1>Boa escrita, {{ request.user.first_name|default:request.user.username }}.</h1>
+      <p>Retome uma pesquisa ou inicie um novo percurso de monografia.</p>
+    </div>
+    <form method="post" action="{% url 'works:create_monograph' %}">{% csrf_token %}<button class="button button--primary" type="submit"><span aria-hidden="true">＋</span> Nova monografia</button></form>
+  </section>
+  {% if monographs %}
+  <section class="work-grid" aria-label="Suas monografias">
+    {% for work in monographs %}
+    <article class="work-card">
+      <div class="work-card__top"><span class="status-badge">{{ work.get_status_display }}</span><span class="work-card__date">Atualizada em {{ work.updated_at|date:"d/m/Y" }}</span></div>
+      <a class="work-card__main" href="{% url 'works:workspace' work.pk 'planejamento' %}">
+        <span class="work-card__icon" aria-hidden="true">§</span>
+        <h2>{{ work.display_title }}</h2>
+        <p>{{ work.theme|default:"O tema ainda será definido."|truncatechars:125 }}</p>
+      </a>
+      <div class="progress-row"><div class="progress-track"><span style="width: {{ work.completion_percentage }}%"></span></div><strong>{{ work.completion_percentage }}%</strong></div>
+      <div class="work-card__footer">
+        <a href="{% url 'works:workspace' work.pk 'planejamento' %}">Continuar escrevendo <span aria-hidden="true">→</span></a>
+        <details class="card-menu"><summary aria-label="Ações da monografia">•••</summary><form method="post" action="{% url 'works:delete_monograph' work.pk %}" data-confirm="Excluir esta monografia e todo o progresso? Esta ação não pode ser desfeita.">{% csrf_token %}<button type="submit">Excluir monografia</button></form></details>
+      </div>
+    </article>
+    {% endfor %}
+  </section>
+  {% else %}
+  <section class="empty-state">
+    <div class="empty-state__symbol" aria-hidden="true">¶</div>
+    <p class="eyebrow">Seu primeiro projeto</p>
+    <h2>Uma monografia começa com uma boa pergunta.</h2>
+    <p>Crie o projeto e siga o roteiro desde o tema até o documento final.</p>
+    <form method="post" action="{% url 'works:create_monograph' %}">{% csrf_token %}<button class="button button--primary" type="submit">Criar minha monografia</button></form>
+  </section>
+  {% endif %}
+</main>
+{% endblock %}
+

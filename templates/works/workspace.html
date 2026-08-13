@@ -1,0 +1,32 @@
+{% extends "works/editor_base.html" %}
+{% block editor_content %}
+{% if part.dynamic %}
+<section class="section-editor" data-section-editor data-add-url="{% url 'works:add_section' work.pk %}">
+  <div class="editor-note"><span aria-hidden="true">§</span><p><strong>Estrutura sugerida, não engessada.</strong> Os três eixos iniciais refletem o padrão recorrente nas monografias analisadas. Renomeie, reorganize o argumento e crie subseções conforme o seu problema. Para uma citação direta longa, inicie a linha com <code>&gt;</code>; o DOCX aplicará recuo de 4 cm, corpo 10 e espaço simples.</p></div>
+  <div class="section-list" data-section-list>
+    {% for section in sections %}{% include "works/_section.html" with section=section number=forloop.counter|stringformat:"s" %}{% empty %}<p class="empty-inline">Crie a primeira seção do desenvolvimento.</p>{% endfor %}
+  </div>
+  <button class="button button--outline add-section" type="button" data-add-section data-parent-id=""><span>＋</span> Adicionar seção primária</button>
+</section>
+{% else %}
+<section class="field-stack">
+  {% for field in fields %}
+  <article class="editor-field" data-field-wrap>
+    <div class="editor-field__label">
+      <label for="field-{{ field.name }}">{{ field.label }}</label>
+      {% if field.kind == "textarea" %}
+      <button class="ai-button" type="button" data-ai-trigger data-target-type="monograph" data-field="{{ field.name }}" {% if not AI_AVAILABLE %}title="Configure GEMINI_API_KEY no servidor"{% endif %}><span aria-hidden="true">✦</span> Revisar com IA</button>
+      {% endif %}
+    </div>
+    {% if field.kind == "textarea" %}
+      <textarea id="field-{{ field.name }}" name="{{ field.name }}" rows="{{ field.rows }}" placeholder="{{ field.placeholder }}" data-autosave data-field="{{ field.name }}">{{ field.value }}</textarea>
+    {% else %}
+      <input id="field-{{ field.name }}" name="{{ field.name }}" type="{{ field.kind }}" value="{{ field.value }}" placeholder="{{ field.placeholder }}" data-autosave data-field="{{ field.name }}" {% if field.kind == 'number' %}min="1900" max="2200"{% endif %}>
+    {% endif %}
+    {% if field.help %}<small>{{ field.help }}</small>{% endif %}
+    <div class="field-meta"><span data-field-state>Salvo</span>{% if field.kind == "textarea" %}<span><b data-word-count>0</b> palavras</span>{% endif %}</div>
+  </article>
+  {% endfor %}
+</section>
+{% endif %}
+{% endblock %}

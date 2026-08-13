@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Como funciona · Monografia SPN{% endblock %}
+{% block body_class %}onboarding-page{% endblock %}
+{% block content %}
+<main class="onboarding" data-carousel>
+  <header class="onboarding__header">
+    <a class="brand brand--light" href="{% url 'works:dashboard' %}">
+      <span class="brand__mark">SPN</span>
+      <span><strong>Monografia</strong><small>Ambiente de escrita acadêmica</small></span>
+    </a>
+    <form method="post">{% csrf_token %}<button class="text-button text-button--light" type="submit">Pular orientações</button></form>
+  </header>
+  <div class="onboarding__stage">
+    <div class="onboarding__rail" data-carousel-rail>
+      {% for slide in slides %}
+      <article class="onboarding-slide{% if forloop.first %} is-active{% endif %}" data-carousel-slide aria-hidden="{% if forloop.first %}false{% else %}true{% endif %}">
+        <div class="onboarding-slide__visual">
+          <span class="onboarding-slide__number">{{ slide.number }}</span>
+          <div class="paper-stack" aria-hidden="true">
+            <div class="paper-stack__back"></div><div class="paper-stack__middle"></div>
+            <div class="paper-stack__front"><span></span><span></span><span></span><span></span><span></span></div>
+          </div>
+        </div>
+        <div class="onboarding-slide__copy">
+          <p class="eyebrow eyebrow--gold">{{ slide.tag }}</p>
+          <h1>{{ slide.title }}</h1>
+          <p>{{ slide.text }}</p>
+          {% if forloop.last %}
+          <form method="post">{% csrf_token %}<button class="button button--gold" type="submit">Entrar no ambiente <span aria-hidden="true">→</span></button></form>
+          {% else %}
+          <button class="button button--gold" type="button" data-carousel-next>Continuar <span aria-hidden="true">→</span></button>
+          {% endif %}
+        </div>
+      </article>
+      {% endfor %}
+    </div>
+  </div>
+  <footer class="onboarding__footer">
+    <button class="carousel-arrow" type="button" data-carousel-prev aria-label="Orientação anterior">←</button>
+    <div class="carousel-dots" role="tablist" aria-label="Orientações">
+      {% for slide in slides %}<button class="carousel-dot{% if forloop.first %} is-active{% endif %}" type="button" data-carousel-dot="{{ forloop.counter0 }}" aria-label="Ir para orientação {{ forloop.counter }}"></button>{% endfor %}
+    </div>
+    <button class="carousel-arrow" type="button" data-carousel-next aria-label="Próxima orientação">→</button>
+  </footer>
+</main>
+{% endblock %}
+

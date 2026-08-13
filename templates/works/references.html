@@ -1,0 +1,18 @@
+{% extends "works/editor_base.html" %}
+{% block editor_content %}
+<section class="reference-manager" data-reference-root>
+  <div class="reference-toolbar"><p><strong>{{ reference_rows|length }}</strong> publicaç{{ reference_rows|length|pluralize:"ão,ões" }} salva{{ reference_rows|length|pluralize:"s" }}</p><a class="button button--outline button--small" href="{% url 'works:workspace' work.pk 'pesquisa' %}">＋ Pesquisar publicações</a></div>
+  <div class="reference-list">
+    {% for row in reference_rows %}
+    <article class="reference-card" data-publication-id="{{ row.publication.pk }}">
+      <div class="reference-card__head"><span>{{ row.publication.get_source_type_display }}</span><span>{{ row.publication.provider }}</span></div>
+      <p class="reference-text">{{ row.formatted }}</p>
+      <div class="reference-card__actions"><button class="copy-button" type="button" data-copy="{{ row.citation }}">Copiar citação {{ row.citation }}</button><a href="{{ row.publication.url }}" target="_blank" rel="noopener noreferrer">Abrir publicação ↗</a><button class="danger-link" type="button" data-delete-publication data-delete-url="{% url 'works:delete_publication' work.pk row.publication.pk %}">Remover</button></div>
+    </article>
+    {% empty %}
+    <div class="empty-state empty-state--compact"><div class="empty-state__symbol">R</div><h2>Nenhuma referência salva</h2><p>Pesquise por tema e salve as obras que realmente utilizar.</p><a class="button button--primary" href="{% url 'works:workspace' work.pk 'pesquisa' %}">Ir para pesquisa</a></div>
+    {% endfor %}
+  </div>
+  <div class="standard-note"><strong>Nota de formatação</strong><p>O aplicativo gera a lista segundo a ABNT NBR 6023:2025. Confira os metadados na própria publicação, especialmente edição, local, editora e páginas.</p></div>
+</section>
+{% endblock %}

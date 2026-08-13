@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}{{ part.label }} · {{ work.display_title }}{% endblock %}
+{% block body_class %}editor-page{% endblock %}
+{% block content %}
+<div class="editor-app" data-editor-root data-work-id="{{ work.pk }}" data-autosave-url="{% url 'works:autosave' work.pk %}" data-ai-url="{% url 'works:ai_review' work.pk %}" data-ai-available="{% if AI_AVAILABLE %}true{% else %}false{% endif %}">
+  <aside class="editor-sidebar" id="editor-sidebar">
+    <div class="editor-sidebar__head">
+      <a class="brand brand--compact brand--light" href="{% url 'works:dashboard' %}"><span class="brand__mark">SPN</span><span><strong>Monografia</strong><small>Escrita acadêmica</small></span></a>
+      <button class="icon-button icon-button--light sidebar-close" type="button" data-sidebar-close aria-label="Fechar menu">×</button>
+    </div>
+    <a class="back-link" href="{% url 'works:dashboard' %}"><span aria-hidden="true">←</span> Todas as monografias</a>
+    <div class="sidebar-work">
+      <span>Projeto atual</span>
+      <strong>{{ work.display_title|truncatechars:54 }}</strong>
+      <div class="sidebar-progress"><span style="width: {{ work.completion_percentage }}%" data-completion-bar></span></div>
+      <small><b data-completion-text>{{ work.completion_percentage }}%</b> do roteiro preenchido</small>
+    </div>
+    <nav class="part-nav" aria-label="Partes da monografia">
+      {% for group in sidebar_groups %}
+      <div class="part-nav__group">
+        <p>{{ group.label }}</p>
+        {% for item in group.items %}
+        <a href="{% url 'works:workspace' work.pk item.slug %}" class="{% if item.slug == part_slug %}is-active{% endif %}" {% if item.slug == part_slug %}aria-current="page"{% endif %}>
+          <span class="nav-dot"></span>{{ item.short_label }}
+        </a>
+        {% endfor %}
+      </div>
+      {% endfor %}
+    </nav>
+    <div class="sidebar-footer">
+      <a href="{% url 'works:onboarding' %}">Orientações iniciais</a>
+      <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit">Sair</button></form>
+    </div>
+  </aside>
+  <div class="sidebar-scrim" data-sidebar-close></div>
+  <main class="editor-main">
+    <header class="editor-topbar">
+      <button class="icon-button menu-toggle" type="button" data-sidebar-open aria-label="Abrir menu">☰</button>
+      <div class="topbar-breadcrumb"><span>{{ part.group }}</span><strong>{{ part.label }}</strong></div>
+      <div class="save-indicator" data-save-indicator><span></span><span data-save-text>Progresso salvo</span></div>
+      <a class="button button--quiet button--small" href="{% url 'works:workspace' work.pk 'exportar' %}">Exportar DOCX</a>
+      <span class="avatar" title="{{ request.user.get_full_name|default:request.user.username }}">{{ request.user.get_full_name|default:request.user.username|slice:":1"|upper }}</span>
+    </header>
+    <div class="editor-content">
+      <header class="part-heading">
+        <div>
+          <p class="eyebrow">{{ part.eyebrow }}</p>
+          <h1>{{ part.label }}</h1>
+          <p>{{ part.description }}</p>
+        </div>
+        <button class="guidance-toggle" type="button" data-guidance-toggle aria-expanded="false"><span aria-hidden="true">i</span> Ver roteiro de revisão</button>
+      </header>
+      <section class="guidance-card" data-guidance-card hidden>
+        <div><p class="guidance-card__label">Como escrever</p><p>{{ part.tip }}</p></div>
+        <div><p class="guidance-card__label">Antes de avançar</p><ul>{% for item in part.checklist %}<li>{{ item }}</li>{% endfor %}</ul></div>
+      </section>
+      {% csrf_token %}
+      {% block editor_content %}{% endblock %}
+    </div>
+  </main>
+</div>
+
+<section class="ai-drawer" data-ai-drawer aria-hidden="true" aria-labelledby="ai-title">
+  <button class="ai-drawer__scrim" type="button" data-ai-close aria-label="Fechar revisão"></button>
+  <div class="ai-drawer__panel">
+    <header><div><p class="eyebrow">Revisão acadêmica</p><h2 id="ai-title">Sugestão da IA</h2></div><button class="icon-button" type="button" data-ai-close aria-label="Fechar">×</button></header>
+    <div class="ai-loading" data-ai-loading><span class="spinner"></span><strong>Analisando sem apagar sua voz…</strong><p>Clareza, coesão, registro acadêmico e integridade das citações.</p></div>
+    <div class="ai-result" data-ai-result hidden>
+      <div class="ai-summary"><span>Visão geral</span><p data-ai-summary></p></div>
+      <div data-ai-warnings></div>
+      <h3>Texto proposto</h3>
+      <div class="ai-proposed" data-ai-proposed></div>
+      <h3>Ajustes explicados</h3>
+      <div class="suggestion-list" data-ai-suggestions></div>
+      <div class="ai-disclaimer">A revisão pode errar. Confira conteúdo teológico, citações e referências antes de aceitar.</div>
+    </div>
+    <footer data-ai-actions hidden><button class="button button--quiet" type="button" data-ai-close>Manter meu texto</button><button class="button button--primary" type="button" data-ai-accept>Aceitar versão proposta</button></footer>
+  </div>
+</section>
+{% endblock %}
+

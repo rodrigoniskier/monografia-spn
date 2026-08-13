@@ -1,0 +1,26 @@
+<article class="section-card section-card--level-{{ section.level }}" data-section-card data-section-id="{{ section.pk }}">
+  <header class="section-card__header">
+    <span class="section-number">{{ number }}</span>
+    <input aria-label="Título da seção {{ number }}" value="{{ section.title }}" maxlength="300" data-section-field="title">
+    <div class="section-actions">
+      {% if section.level < 5 %}<button class="icon-button" type="button" data-add-section data-parent-id="{{ section.pk }}" title="Adicionar subseção" aria-label="Adicionar subseção">＋</button>{% endif %}
+      <button class="icon-button icon-button--danger" type="button" data-delete-section title="Excluir seção" aria-label="Excluir seção">×</button>
+    </div>
+  </header>
+  <div class="section-card__body">
+    <div class="editor-field__label"><label for="section-{{ section.pk }}">Conteúdo da seção</label><button class="ai-button" type="button" data-ai-trigger data-target-type="section" data-section-id="{{ section.pk }}"><span aria-hidden="true">✦</span> Revisar com IA</button></div>
+    <textarea id="section-{{ section.pk }}" rows="16" placeholder="Apresente a ideia central, dialogue com as fontes e mostre como esta seção contribui para responder ao problema." data-section-field="content">{{ section.content }}</textarea>
+    <div class="field-meta"><span data-field-state>Salvo</span><span><b data-word-count>0</b> palavras</span></div>
+  </div>
+  {% if section.children.all %}
+  <div class="subsection-list">
+    {% for child in section.children.all %}
+      {% with counter=forloop.counter|stringformat:"s" %}
+        {% with prefix=number|add:"." %}
+          {% include "works/_section.html" with section=child number=prefix|add:counter %}
+        {% endwith %}
+      {% endwith %}
+    {% endfor %}
+  </div>
+  {% endif %}
+</article>

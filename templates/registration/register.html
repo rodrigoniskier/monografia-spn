@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Criar conta · Monografia SPN{% endblock %}
+{% block body_class %}auth-page{% endblock %}
+{% block content %}
+<main class="auth-shell">
+  <section class="auth-story auth-story--register" aria-labelledby="story-title">
+    <a class="brand brand--light" href="{% url 'login' %}">
+      <span class="brand__mark">SPN</span>
+      <span><strong>Monografia</strong><small>Seminário Presbiteriano do Norte</small></span>
+    </a>
+    <div class="auth-story__content">
+      <p class="eyebrow eyebrow--gold">Um percurso guiado</p>
+      <h1 id="story-title">Comece com clareza. Termine com consistência.</h1>
+      <p>Em cada parte, você encontrará uma orientação curta, um roteiro de conferência e apoio de revisão acadêmica.</p>
+      <ul class="feature-ticks">
+        <li>Estrutura institucional do SPN</li>
+        <li>Formatação final conforme a ABNT</li>
+        <li>Pesquisa em catálogos reais</li>
+        <li>Download editável em DOCX</li>
+      </ul>
+    </div>
+    <p class="auth-story__foot">A pesquisa é sua. O ambiente ajuda a dar forma a ela.</p>
+  </section>
+  <section class="auth-panel">
+    <div class="auth-card auth-card--register">
+      <p class="eyebrow">Nova conta</p>
+      <h2>Prepare seu espaço de escrita</h2>
+      <p class="muted">Use uma senha exclusiva. Todos os campos são obrigatórios.</p>
+      <form method="post" class="form-stack">
+        {% csrf_token %}
+        {% for hidden in form.hidden_fields %}{{ hidden }}{% endfor %}
+        {% for field in form.visible_fields %}
+          <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+          {{ field }}
+          {% if field.help_text %}<small class="field-help">{{ field.help_text|safe }}</small>{% endif %}
+          {% for error in field.errors %}<small class="field-error">{{ error }}</small>{% endfor %}
+        {% endfor %}
+        <button class="button button--primary button--wide" type="submit">Criar conta e começar <span aria-hidden="true">→</span></button>
+      </form>
+      <p class="auth-card__switch">Já possui uma conta? <a href="{% url 'login' %}">Entrar</a></p>
+    </div>
+  </section>
+</main>
+{% endblock %}
+
