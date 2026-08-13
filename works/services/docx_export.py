@@ -5,6 +5,7 @@ from __future__ import annotations
 from io import BytesIO
 import re
 from typing import Iterable
+import unicodedata
 
 from docx import Document
 from docx.enum.section import WD_SECTION
@@ -20,7 +21,8 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Cm, Pt
 
-from .abnt import format_reference, sort_key
+from .abnt import format_reference
+from .docx_footnotes import inject_footnotes
 
 
 FONT_NAME = "Times New Roman"
@@ -155,6 +157,32 @@ def _configure_styles(doc: Document):
         style.paragraph_format.line_spacing = 1.5
         style.paragraph_format.space_before = Pt(0)
         style.paragraph_format.space_after = Pt(0)
+
+    if "Footnote Text" not in [style.name for style in doc.styles]:
+        footnote_text = doc.styles.add_style("Footnote Text", WD_STYLE_TYPE.PARAGRAPH)
+    else:
+        footnote_text = doc.styles["Footnote Text"]
+    footnote_text.font.name = FONT_NAME
+    footnote_text._element.get_or_add_rPr().rFonts.set(qn("w:ascii"), FONT_NAME)
+    footnote_text._element.get_or_add_rPr().rFonts.set(qn("w:hAnsi"), FONT_NAME)
+    footnote_text.font.size = Pt(SMALL_SIZE)
+    footnote_text.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+    footnote_text.paragraph_format.first_line_indent = Cm(0)
+    footnote_text.paragraph_format.line_spacing_rule = WD_LINE_SPACING.SINGLE
+    footnote_text.paragraph_format.space_before = Pt(0)
+    footnote_text.paragraph_format.space_after = Pt(0)
+
+    if "Footnote Reference" not in [style.name for style in doc.styles]:
+        footnote_reference = doc.styles.add_style(
+            "Footnote Reference", WD_STYLE_TYPE.CHARACTER
+        )
+    else:
+        footnote_reference = doc.styles["Footnote Reference"]
+    footnote_reference.font.name = FONT_NAME
+    footnote_reference._element.get_or_add_rPr().rFonts.set(qn("w:ascii"), FONT_NAME)
+    footnote_reference._element.get_or_add_rPr().rFonts.set(qn("w:hAnsi"), FONT_NAME)
+    footnote_reference.font.size = Pt(SMALL_SIZE)
+    footnote_reference.font.superscript = True
 
 
 def _add_centered(doc, text, *, bold=False, size=BODY_SIZE, after=0, before=0, uppercase=False):
@@ -466,26 +494,63 @@ def _add_front_matter(doc, work, toc_entries):
     _add_toc(doc, toc_entries)
 
 
-def _add_references(doc, publications: Iterable, *, bookmark=None):
-    publications = sorted(publications, key=sort_key)
+def _reference_text_sort_key(text: str):
+    normalized = unicodedata.normalize("NFKD", _safe(text))
+    return "".join(char for char in normalized if not unicodedata.combining(char)).casefold()
+
+
+def _add_references(
+    doc, publications: Iterable, imported_references: Iterable = (), *, bookmark=None
+):
+    rows = []
+    for publication in publications:
+        reference_text = format_reference(publication)
+        rows.append(
+            {
+                "text": reference_text,
+                "title": _safe(publication.title),
+                "subtitle": _safe(publication.subtitle),
+                "sort": _reference_text_sort_key(reference_text),
+            }
+        )
+    rows.extend(
+        {
+            "text": _safe(reference.text),
+            "title": "",
+            "subtitle": "",
+            "sort": _reference_text_sort_key(reference.text),
+        }
+        for reference in imported_references
+    )
+    unique_rows = []
+    seen = set()
+    for row in sorted(rows, key=lambda item: item["sort"]):
+        identity = re.sub(r"\s+", " ", row["text"]).strip().casefold()
+        if not identity or identity in seen:
+            continue
+        seen.add(identity)
+        unique_rows.append(row)
     _add_heading(doc, "REFERÊNCIAS", 1, page_break=True, bookmark=bookmark)
-    if not publications:
+    if not unique_rows:
         paragraph = doc.add_paragraph("[Nenhuma referência foi salva.]" )
         paragraph.paragraph_format.first_line_indent = Cm(0)
         return
-    for publication in publications:
-        text = format_reference(publication)
+    for row in unique_rows:
+        text = row["text"]
         paragraph = doc.add_paragraph()
         paragraph.paragraph_format.first_line_indent = Cm(-1.25)
         paragraph.paragraph_format.left_indent = Cm(1.25)
         paragraph.paragraph_format.line_spacing_rule = WD_LINE_SPACING.SINGLE
         paragraph.paragraph_format.space_after = Pt(12)
-        before, matched, after = text.partition(_safe(publication.title))
+        if row["title"]:
+            before, matched, after = text.partition(row["title"])
+        else:
+            before, matched, after = "", "", text
         _set_run_font(paragraph.add_run(before))
         if matched:
             title_text = matched
-            if publication.subtitle and _safe(publication.subtitle) in after:
-                prefix, subtitle, suffix = after.partition(_safe(publication.subtitle))
+            if row["subtitle"] and row["subtitle"] in after:
+                prefix, subtitle, suffix = after.partition(row["subtitle"])
                 title_text += prefix + subtitle
                 after = suffix
             _set_run_font(paragraph.add_run(title_text), bold=True)
@@ -567,7 +632,12 @@ def build_monograph_docx(work) -> BytesIO:
         bookmark=bookmarks[str(conclusion_number)],
     )
     _add_prose(doc, work.conclusion or "[Considerações finais ainda não preenchidas.]")
-    _add_references(doc, work.publications.all(), bookmark=bookmarks["references"])
+    _add_references(
+        doc,
+        work.publications.all(),
+        work.reference_entries.all(),
+        bookmark=bookmarks["references"],
+    )
 
     if work.glossary:
         _add_heading(doc, "GLOSSÁRIO", 1, page_break=True, bookmark=bookmarks["glossary"])
@@ -580,7 +650,9 @@ def build_monograph_docx(work) -> BytesIO:
         _add_prose(doc, work.annexes)
 
     _mark_update_fields(doc)
-    output = BytesIO()
-    doc.save(output)
-    output.seek(0)
-    return output
+    raw_output = BytesIO()
+    doc.save(raw_output)
+    notes_by_marker = {
+        str(note.marker): note.reference_text for note in work.citation_notes.all()
+    }
+    return inject_footnotes(raw_output.getvalue(), notes_by_marker)

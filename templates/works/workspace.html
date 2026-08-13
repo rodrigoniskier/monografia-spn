@@ -13,13 +13,27 @@
   {% for field in fields %}
   <article class="editor-field" data-field-wrap>
     <div class="editor-field__label">
-      <label for="field-{{ field.name }}">{{ field.label }}</label>
+      <label id="label-{{ field.name }}" for="field-{{ field.name }}">{{ field.label }}</label>
       {% if field.kind == "textarea" %}
-      <button class="ai-button" type="button" data-ai-trigger data-target-type="monograph" data-field="{{ field.name }}" {% if not AI_AVAILABLE %}title="Configure GEMINI_API_KEY no servidor"{% endif %}><span aria-hidden="true">✦</span> Revisar com IA</button>
+      <div class="editor-field__actions">
+        {% if field.citation_enabled %}
+        <button class="citation-button" type="button" data-citation-trigger data-source-id="field-{{ field.name }}"><span aria-hidden="true">¹</span> Incluir ref.</button>
+        {% endif %}
+        <button class="ai-button" type="button" data-ai-trigger data-target-type="monograph" data-field="{{ field.name }}" {% if not AI_AVAILABLE %}title="Configure GEMINI_API_KEY no servidor"{% endif %}><span aria-hidden="true">✦</span> Revisar com IA</button>
+      </div>
       {% endif %}
     </div>
     {% if field.kind == "textarea" %}
+      {% if field.citation_enabled %}
+      <textarea class="citation-source" id="field-{{ field.name }}" name="{{ field.name }}" rows="{{ field.rows }}" data-citation-source data-autosave data-field="{{ field.name }}" data-target-key="monograph:{{ field.name }}">{{ field.value }}</textarea>
+      <div class="citation-editor" contenteditable="true" role="textbox" aria-multiline="true" aria-labelledby="label-{{ field.name }}" data-citation-editor data-source-id="field-{{ field.name }}" data-placeholder="{{ field.placeholder }}" data-rows="{{ field.rows }}"></div>
+      <div class="citation-notes" data-citation-notes data-source-id="field-{{ field.name }}" data-target-key="monograph:{{ field.name }}">
+        <div class="citation-notes__head"><strong>Referências no rodapé</strong><span>Os números acompanham o texto e serão notas reais no DOCX.</span></div>
+        <div class="citation-notes__list" data-citation-note-list></div>
+      </div>
+      {% else %}
       <textarea id="field-{{ field.name }}" name="{{ field.name }}" rows="{{ field.rows }}" placeholder="{{ field.placeholder }}" data-autosave data-field="{{ field.name }}">{{ field.value }}</textarea>
+      {% endif %}
     {% else %}
       <input id="field-{{ field.name }}" name="{{ field.name }}" type="{{ field.kind }}" value="{{ field.value }}" placeholder="{{ field.placeholder }}" data-autosave data-field="{{ field.name }}" {% if field.kind == 'number' %}min="1900" max="2200"{% endif %}>
     {% endif %}

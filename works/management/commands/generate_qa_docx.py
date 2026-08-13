@@ -5,8 +5,9 @@ from pathlib import Path
 from django.contrib.auth.models import User
 from django.core.management.base import BaseCommand
 
-from works.models import Monograph, Publication, Section
+from works.models import CitationNote, Monograph, Publication, ReferenceEntry, Section
 from works.services.docx_export import build_monograph_docx
+from works.services.reference_import import reference_checksum
 
 
 PARAGRAPH = (
@@ -71,10 +72,31 @@ class Command(BaseCommand):
             section = Section.objects.create(monograph=work, title=title, level=1, order=index, content="\n\n".join([PARAGRAPH] * 6))
             Section.objects.create(monograph=work, parent=section, title=f"Aspectos específicos da seção {index}", level=2, order=1, content="\n\n".join([PARAGRAPH] * 3))
         work.publications.all().delete()
+        work.reference_entries.all().delete()
+        work.citation_notes.all().delete()
         Publication.objects.create(monograph=work, source_type="book", title="Institutas da religião cristã", authors=["João Calvino"], year=2006, city="São Paulo", publisher="Cultura Cristã", url="https://openlibrary.org/works/OL123W", provider="Open Library")
         Publication.objects.create(monograph=work, source_type="article", title="Christ-centered proclamation", authors=["Maria da Silva", "John Smith"], year=2025, container_title="Journal of Reformed Theology", volume="19", issue="2", pages="100-122", doi="10.1000/example", url="https://doi.org/10.1000/example", provider="Crossref")
+        imported_text = "HORTON, Michael. A missão da igreja no mundo contemporâneo. São Paulo: Cultura Cristã, 2012."
+        imported = ReferenceEntry.objects.create(
+            monograph=work,
+            text=imported_text,
+            source_filename="referencias-qa.docx",
+            checksum=reference_checksum(imported_text),
+            order=1,
+        )
+        note = CitationNote.objects.create(
+            monograph=work,
+            target_key="monograph:introduction",
+            sequence=1,
+            reference_text=imported_text + " p. 42.",
+            reference_entry=imported,
+        )
+        insertion = work.introduction.find(".") + 1
+        work.introduction = (
+            work.introduction[:insertion] + note.token + work.introduction[insertion:]
+        )
+        work.save(update_fields=["introduction", "updated_at"])
         output_path = Path(options["output"]).resolve()
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_bytes(build_monograph_docx(work).getvalue())
         self.stdout.write(self.style.SUCCESS(f"DOCX de QA gerado em {output_path}"))
-

@@ -3,6 +3,7 @@ google-genai==2.18.0
 pydantic==2.13.4
 python-docx==1.2.0
 python-dotenv==1.1.1
+pypdf>=5.4,<7.0
 requests==2.32.5
 socksio==1.0.0
 whitenoise==6.9.0

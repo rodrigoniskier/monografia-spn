@@ -2,7 +2,7 @@
 {% block title %}{{ part.label }} · {{ work.display_title }}{% endblock %}
 {% block body_class %}editor-page{% endblock %}
 {% block content %}
-<div class="editor-app" data-editor-root data-work-id="{{ work.pk }}" data-autosave-url="{% url 'works:autosave' work.pk %}" data-ai-url="{% url 'works:ai_review' work.pk %}" data-ai-available="{% if AI_AVAILABLE %}true{% else %}false{% endif %}">
+<div class="editor-app" data-editor-root data-work-id="{{ work.pk }}" data-autosave-url="{% url 'works:autosave' work.pk %}" data-ai-url="{% url 'works:ai_review' work.pk %}" data-citation-url="{% url 'works:create_citation_note' work.pk %}" data-ai-available="{% if AI_AVAILABLE %}true{% else %}false{% endif %}">
   <aside class="editor-sidebar" id="editor-sidebar">
     <div class="editor-sidebar__head">
       <a class="brand brand--compact brand--light" href="{% url 'works:dashboard' %}"><span class="brand__mark">SPN</span><span><strong>Monografia</strong><small>Escrita acadêmica</small></span></a>
@@ -28,8 +28,11 @@
       {% endfor %}
     </nav>
     <div class="sidebar-footer">
-      <a href="{% url 'works:onboarding' %}">Orientações iniciais</a>
-      <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit">Sair</button></form>
+      <div class="sidebar-footer__actions">
+        <a href="{% url 'works:onboarding' %}">Orientações iniciais</a>
+        <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit">Sair</button></form>
+      </div>
+      <p>Desenvolvido por: Rodrigo Niskier</p>
     </div>
   </aside>
   <div class="sidebar-scrim" data-sidebar-close></div>
@@ -77,5 +80,22 @@
     <footer data-ai-actions hidden><button class="button button--quiet" type="button" data-ai-close>Manter meu texto</button><button class="button button--primary" type="button" data-ai-accept>Aceitar versão proposta</button></footer>
   </div>
 </section>
-{% endblock %}
 
+{{ citation_reference_options|json_script:"citation-reference-options" }}
+{{ citation_notes_data|json_script:"citation-notes-data" }}
+<section class="reference-picker" data-reference-picker aria-hidden="true" aria-labelledby="reference-picker-title">
+  <button class="reference-picker__scrim" type="button" data-reference-picker-close aria-label="Fechar lista de referências"></button>
+  <div class="reference-picker__panel" role="dialog" aria-modal="true">
+    <header>
+      <div><p class="eyebrow">Nota de rodapé referencial</p><h2 id="reference-picker-title">Escolha a referência</h2></div>
+      <button class="icon-button" type="button" data-reference-picker-close aria-label="Fechar">×</button>
+    </header>
+    <div class="reference-picker__body">
+      <label class="reference-picker__search">Pesquisar na biblioteca<input type="search" data-reference-picker-search placeholder="Autor, título ou palavra da referência"></label>
+      <label class="reference-picker__locator">Página ou localização <span>(opcional)</span><input type="text" maxlength="180" data-reference-picker-locator placeholder="Ex.: p. 42; cap. 3; § 12"></label>
+      <div class="reference-picker__list" data-reference-picker-list></div>
+      <div class="reference-picker__empty" data-reference-picker-empty hidden><strong>Nenhuma referência disponível.</strong><p>Importe uma lista DOCX/PDF ou salve uma publicação pesquisada antes de inserir a nota.</p><a class="button button--outline button--small" href="{% url 'works:workspace' work.pk 'referencias' %}">Abrir referências</a></div>
+    </div>
+  </div>
+</section>
+{% endblock %}

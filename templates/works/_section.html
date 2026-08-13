@@ -8,8 +8,10 @@
     </div>
   </header>
   <div class="section-card__body">
-    <div class="editor-field__label"><label for="section-{{ section.pk }}">Conteúdo da seção</label><button class="ai-button" type="button" data-ai-trigger data-target-type="section" data-section-id="{{ section.pk }}"><span aria-hidden="true">✦</span> Revisar com IA</button></div>
-    <textarea id="section-{{ section.pk }}" rows="16" placeholder="Apresente a ideia central, dialogue com as fontes e mostre como esta seção contribui para responder ao problema." data-section-field="content">{{ section.content }}</textarea>
+    <div class="editor-field__label"><label id="label-section-{{ section.pk }}" for="section-{{ section.pk }}">Conteúdo da seção</label><div class="editor-field__actions"><button class="citation-button" type="button" data-citation-trigger data-source-id="section-{{ section.pk }}"><span aria-hidden="true">¹</span> Incluir ref.</button><button class="ai-button" type="button" data-ai-trigger data-target-type="section" data-section-id="{{ section.pk }}"><span aria-hidden="true">✦</span> Revisar com IA</button></div></div>
+    <textarea class="citation-source" id="section-{{ section.pk }}" rows="16" data-citation-source data-section-field="content" data-target-key="section:{{ section.pk }}">{{ section.content }}</textarea>
+    <div class="citation-editor" contenteditable="true" role="textbox" aria-multiline="true" aria-labelledby="label-section-{{ section.pk }}" data-citation-editor data-source-id="section-{{ section.pk }}" data-placeholder="Apresente a ideia central, dialogue com as fontes e mostre como esta seção contribui para responder ao problema." data-rows="16"></div>
+    <div class="citation-notes" data-citation-notes data-source-id="section-{{ section.pk }}" data-target-key="section:{{ section.pk }}"><div class="citation-notes__head"><strong>Referências no rodapé</strong><span>Os números acompanham o texto e serão notas reais no DOCX.</span></div><div class="citation-notes__list" data-citation-note-list></div></div>
     <div class="field-meta"><span data-field-state>Salvo</span><span><b data-word-count>0</b> palavras</span></div>
   </div>
   {% if section.children.all %}

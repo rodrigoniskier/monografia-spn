@@ -268,7 +268,7 @@ PARTS = OrderedDict(
                 "group": "Fontes",
                 "eyebrow": "ABNT NBR 6023:2025",
                 "description": "Revise as publicações salvas e mantenha somente as fontes efetivamente citadas no texto.",
-                "tip": "A lista é ordenada alfabeticamente e exportada em espaço simples. Confira edição, local, editora, DOI/URL e data de acesso.",
+                "tip": "Importe sua lista ABNT em DOCX/PDF ou salve publicações pesquisadas. A biblioteca alimenta o botão “Incluir ref.” e a lista final, ordenada alfabeticamente e exportada em espaço simples.",
                 "checklist": ["Toda citação possui referência correspondente?", "Toda referência foi citada?", "Dados editoriais foram conferidos?"],
                 "fields": [],
                 "template": "works/references.html",
@@ -331,6 +331,21 @@ AI_FIELDS = {
 }
 
 
+# Campos que realmente entram no texto acadêmico exportado e nos quais notas
+# referenciais são apropriadas. Resumo, dedicatória, epígrafe e formulário de
+# planejamento permanecem sem notas por orientação metodológica.
+CITATION_FIELDS = {
+    "acknowledgements",
+    "confessional_content",
+    "confessional_references",
+    "introduction",
+    "conclusion",
+    "glossary",
+    "appendices",
+    "annexes",
+}
+
+
 ONBOARDING_SLIDES = [
     {
         "number": "01",
@@ -363,4 +378,3 @@ ONBOARDING_SLIDES = [
         "tag": "Entrega",
     },
 ]
-

@@ -15,6 +15,8 @@ Aplicativo web para orientar alunos do Seminário Presbiteriano do Norte (SPN) d
 - pesquisa simultânea em Crossref, OpenAlex, Google Books e Open Library;
 - resultados assinados pelo servidor e aceitação apenas de links HTTPS de domínios acadêmicos conhecidos;
 - referências formatadas e indicação autor-data;
+- importação de listas de referências ABNT em DOCX ou PDF, com deduplicação;
+- notas referenciais numéricas vinculadas ao cursor e exportadas como notas de rodapé nativas do Word;
 - exportação DOCX em A4, Times New Roman 12, margens 3/2 cm, entrelinha 1,5, paginação, sumário e estrutura acadêmica;
 - interface responsiva e sem dependência de CDN.
 
@@ -38,6 +40,7 @@ O aplicativo usa **seções**, e não capítulos, e preserva particularidades in
 - SQLite
 - `google-genai` (Gemini Interactions API, com fallback de compatibilidade)
 - `python-docx`
+- `pypdf`
 - WhiteNoise
 
 ## Execução local
@@ -88,6 +91,10 @@ A proposta não sobrescreve automaticamente o trabalho. O autor precisa aceitá-
 
 O metabuscador consulta APIs públicas de catálogos reconhecidos. Os resultados são ordenados pela relação com a consulta e pelos metadados disponíveis. Um link real comprova que o registro existe, mas o aluno ainda deve ler a obra e conferir autoria, edição, páginas e pertinência antes de citá-la.
 
+## Referências importadas e notas de rodapé
+
+Na área **Referências**, o autor pode importar um DOCX ou PDF de até 5 MB. Para melhor resultado, use uma referência completa por parágrafo; PDFs precisam conter texto selecionável. No editor, o botão **Incluir ref.** abre a biblioteca unificada, permite indicar página ou localização e insere um número sobrescrito no ponto do cursor. O texto da nota permanece editável logo abaixo do conteúdo. No DOCX final, os marcadores são convertidos em notas de rodapé verdadeiras, em corpo 10 e espaço simples.
+
 ## Testes
 
 ```bash
@@ -95,7 +102,7 @@ O metabuscador consulta APIs públicas de catálogos reconhecidos. Os resultados
 .venv/bin/python manage.py check
 ```
 
-Os testes cobrem acesso por proprietário, salvamento, hierarquia de seções, aceite seguro de revisão, assinatura de resultados bibliográficos, validação de URLs, contrato da Gemini API e estrutura do DOCX.
+Os testes cobrem acesso por proprietário, salvamento, hierarquia de seções, aceite seguro de revisão, assinatura de resultados bibliográficos, importação de listas, notas referenciais, validação de URLs, contrato da Gemini API e estrutura do DOCX.
 
 ## Implantação no PythonAnywhere
 
@@ -106,4 +113,3 @@ bash deploy/update_pythonanywhere.sh
 ```
 
 O recarregamento do Web App continua sendo feito no painel do PythonAnywhere.
-

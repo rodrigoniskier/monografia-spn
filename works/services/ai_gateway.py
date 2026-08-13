@@ -77,7 +77,10 @@ Regras invioláveis:
 5. Prefira linguagem natural e precisa; não homogeneíze o texto em estilo de IA.
 6. Siga a ABNT atual: use “seção” e “subseção”, não “capítulo”, para divisões do
    trabalho acadêmico; use autor-data sem sobrenome integralmente em caixa-alta.
-7. A resposta deve obedecer exatamente ao esquema estruturado solicitado.
+7. Marcadores no formato [[FN:uuid]] representam notas de rodapé. Preserve cada
+   marcador exatamente, uma única vez e na mesma posição argumentativa; nunca o
+   corrija, traduza, remova, duplique ou invente outro.
+8. A resposta deve obedecer exatamente ao esquema estruturado solicitado.
 """.strip()
 
 

@@ -22,6 +22,10 @@ urlpatterns = [
     path("api/monografias/<int:pk>/pesquisar/", views.research_search, name="research_search"),
     path("api/monografias/<int:pk>/referencias/salvar/", views.save_publication, name="save_publication"),
     path("api/monografias/<int:pk>/referencias/<int:publication_id>/excluir/", views.delete_publication, name="delete_publication"),
+    path("monografias/<int:pk>/referencias/importar/", views.import_references, name="import_references"),
+    path("api/monografias/<int:pk>/referencias-importadas/<int:reference_id>/excluir/", views.delete_reference_entry, name="delete_reference_entry"),
+    path("api/monografias/<int:pk>/notas/", views.create_citation_note, name="create_citation_note"),
+    path("api/monografias/<int:pk>/notas/<int:note_id>/", views.update_citation_note, name="update_citation_note"),
+    path("api/monografias/<int:pk>/notas/<int:note_id>/excluir/", views.delete_citation_note, name="delete_citation_note"),
     path("monografias/<int:pk>/exportar/docx/", views.export_docx, name="export_docx"),
 ]
-

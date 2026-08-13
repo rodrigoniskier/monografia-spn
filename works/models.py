@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 import re
+import uuid
 
 from django.contrib.auth.models import User
 from django.core.validators import MaxValueValidator, MinValueValidator
@@ -239,6 +240,76 @@ class Publication(models.Model):
         return self.title
 
 
+class ReferenceEntry(models.Model):
+    """Referência ABNT importada pelo autor a partir de DOCX ou PDF."""
+
+    monograph = models.ForeignKey(
+        Monograph, on_delete=models.CASCADE, related_name="reference_entries"
+    )
+    text = models.TextField(max_length=4000)
+    source_filename = models.CharField(max_length=255, blank=True)
+    checksum = models.CharField(max_length=64)
+    order = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["order", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["monograph", "checksum"],
+                name="unique_imported_reference_per_monograph",
+            )
+        ]
+
+    def __str__(self):
+        return self.text[:120]
+
+
+class CitationNote(models.Model):
+    """Nota referencial vinculada a um marcador estável dentro do texto."""
+
+    monograph = models.ForeignKey(
+        Monograph, on_delete=models.CASCADE, related_name="citation_notes"
+    )
+    marker = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    target_key = models.CharField(max_length=120)
+    sequence = models.PositiveIntegerField()
+    reference_text = models.TextField(max_length=4000)
+    reference_entry = models.ForeignKey(
+        ReferenceEntry,
+        on_delete=models.SET_NULL,
+        related_name="citation_notes",
+        null=True,
+        blank=True,
+    )
+    publication = models.ForeignKey(
+        Publication,
+        on_delete=models.SET_NULL,
+        related_name="citation_notes",
+        null=True,
+        blank=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["sequence", "id"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["monograph", "sequence"],
+                name="unique_citation_sequence_per_monograph",
+            )
+        ]
+
+    @property
+    def token(self):
+        return f"[[FN:{self.marker}]]"
+
+    def __str__(self):
+        return f"Nota {self.sequence} — {self.reference_text[:100]}"
+
+
 class AIRevision(models.Model):
     ACTIONS = [
         ("review", "Análise acadêmica"),
@@ -266,4 +337,3 @@ class AIRevision(models.Model):
 
     def __str__(self):
         return f"{self.get_action_display()} - {self.target_key}"
-

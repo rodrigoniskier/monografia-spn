@@ -1,18 +1,29 @@
 from datetime import date
 from io import BytesIO
 import json
+import zipfile
 from unittest.mock import patch
 
 from django.contrib.auth.models import User
 from django.core import signing
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from docx import Document
 
 from .guidance import PARTS
-from .models import AIRevision, Monograph, Profile, Publication, Section
+from .models import (
+    AIRevision,
+    CitationNote,
+    Monograph,
+    Profile,
+    Publication,
+    ReferenceEntry,
+    Section,
+)
 from .services.abnt import author_reference, citation_label, format_reference, trusted_publication_url
 from .services.ai_gateway import AcademicRevision, RevisionSuggestion, _call_interactions, _extract_text
+from .services.reference_import import _references_from_pdf_text, reference_checksum
 
 
 class AppTestCase(TestCase):
@@ -63,6 +74,39 @@ class AppTestCase(TestCase):
                 response = self.client.get(reverse("works:workspace", args=[self.work.pk, slug]))
                 self.assertEqual(response.status_code, 200)
                 self.assertContains(response, PARTS[slug]["label"])
+
+    def test_credit_and_reference_controls_render(self):
+        reference_text = "CALVINO, João. As institutas. São Paulo: Cultura Cristã, 2006."
+        reference = ReferenceEntry.objects.create(
+            monograph=self.work,
+            text=reference_text,
+            checksum=reference_checksum(reference_text),
+            order=1,
+        )
+        note = CitationNote.objects.create(
+            monograph=self.work,
+            target_key="monograph:introduction",
+            sequence=1,
+            reference_text=reference_text,
+            reference_entry=reference,
+        )
+        self.work.introduction += note.token
+        self.work.save(update_fields=["introduction", "updated_at"])
+
+        introduction = self.client.get(
+            reverse("works:workspace", args=[self.work.pk, "introducao"])
+        )
+        self.assertContains(introduction, "Desenvolvido por: Rodrigo Niskier")
+        self.assertContains(introduction, "data-citation-trigger")
+        self.assertContains(introduction, "data-citation-editor")
+        self.assertContains(introduction, 'id="citation-notes-data"')
+        self.assertContains(introduction, "CALVINO")
+
+        references = self.client.get(
+            reverse("works:workspace", args=[self.work.pk, "referencias"])
+        )
+        self.assertContains(references, 'accept=".docx,.pdf,')
+        self.assertContains(references, "Importar lista pronta")
 
     def test_new_monograph_has_spn_structure_starters(self):
         response = self.client.post(reverse("works:create_monograph"))
@@ -163,6 +207,169 @@ class AppTestCase(TestCase):
         self.assertAlmostEqual(first.top_margin.cm, 3, places=1)
         self.assertAlmostEqual(first.left_margin.cm, 3, places=1)
         self.assertAlmostEqual(first.right_margin.cm, 2, places=1)
+
+    def test_docx_reference_list_import_and_deduplication(self):
+        source = Document()
+        source.add_paragraph("REFERÊNCIAS")
+        source.add_paragraph(
+            "CALVINO, João. As institutas. São Paulo: Cultura Cristã, 2006."
+        )
+        source.add_paragraph(
+            "HORTON, Michael. A missão da igreja. São Paulo: Cultura Cristã, 2012."
+        )
+        content = BytesIO()
+        source.save(content)
+        uploaded = SimpleUploadedFile(
+            "referencias.docx",
+            content.getvalue(),
+            content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )
+        response = self.client.post(
+            reverse("works:import_references", args=[self.work.pk]),
+            {"reference_file": uploaded},
+        )
+        self.assertRedirects(
+            response,
+            reverse("works:workspace", args=[self.work.pk, "referencias"]),
+        )
+        self.assertEqual(self.work.reference_entries.count(), 2)
+
+        content.seek(0)
+        duplicate_upload = SimpleUploadedFile("referencias.docx", content.getvalue())
+        self.client.post(
+            reverse("works:import_references", args=[self.work.pk]),
+            {"reference_file": duplicate_upload},
+        )
+        self.assertEqual(self.work.reference_entries.count(), 2)
+
+    def test_citation_note_is_inserted_at_cursor_and_can_be_removed(self):
+        reference_text = (
+            "CALVINO, João. As institutas. São Paulo: Cultura Cristã, 2006."
+        )
+        reference = ReferenceEntry.objects.create(
+            monograph=self.work,
+            text=reference_text,
+            source_filename="referencias.docx",
+            checksum=reference_checksum(reference_text),
+            order=1,
+        )
+        before = "A proclamação cristã"
+        response = self.post_json(
+            reverse("works:create_citation_note", args=[self.work.pk]),
+            {
+                "target_key": "monograph:introduction",
+                "current_text": self.work.introduction,
+                "before_text": before,
+                "source_kind": "imported",
+                "source_id": reference.pk,
+                "locator": "p. 42.",
+            },
+        )
+        self.assertEqual(response.status_code, 200)
+        note = CitationNote.objects.get(monograph=self.work)
+        self.work.refresh_from_db()
+        self.assertEqual(note.sequence, 1)
+        self.assertIn(note.token, self.work.introduction)
+        self.assertTrue(self.work.introduction.startswith(before + note.token))
+        self.assertTrue(note.reference_text.endswith("p. 42."))
+
+        removed = self.post_json(
+            reverse("works:delete_citation_note", args=[self.work.pk, note.pk]), {}
+        )
+        self.assertEqual(removed.status_code, 200)
+        self.work.refresh_from_db()
+        self.assertNotIn(note.token, self.work.introduction)
+        self.assertFalse(CitationNote.objects.filter(pk=note.pk).exists())
+
+    def test_docx_export_contains_true_footnote_and_imported_bibliography(self):
+        reference_text = (
+            "CALVINO, João. As institutas. São Paulo: Cultura Cristã, 2006."
+        )
+        reference = ReferenceEntry.objects.create(
+            monograph=self.work,
+            text=reference_text,
+            source_filename="referencias.docx",
+            checksum=reference_checksum(reference_text),
+            order=1,
+        )
+        publication = Publication.objects.create(
+            monograph=self.work,
+            source_type="book",
+            title="A missão da igreja no mundo contemporâneo",
+            authors=["Michael Horton"],
+            year=2012,
+            city="São Paulo",
+            publisher="Cultura Cristã",
+            url="https://openlibrary.org/works/OL123W",
+            provider="Open Library",
+        )
+        note = CitationNote.objects.create(
+            monograph=self.work,
+            target_key="monograph:introduction",
+            sequence=1,
+            reference_text=reference_text + " p. 42.",
+            reference_entry=reference,
+        )
+        self.work.introduction += note.token
+        self.work.save(update_fields=["introduction", "updated_at"])
+
+        response = self.client.get(
+            reverse("works:export_docx", args=[self.work.pk])
+        )
+        self.assertEqual(response.status_code, 200)
+        with zipfile.ZipFile(BytesIO(response.content)) as archive:
+            self.assertIn("word/footnotes.xml", archive.namelist())
+            self.assertIn("word/_rels/footnotes.xml.rels", archive.namelist())
+            document_xml = archive.read("word/document.xml").decode("utf-8")
+            footnotes_xml = archive.read("word/footnotes.xml").decode("utf-8")
+            self.assertIn("footnoteReference", document_xml)
+            self.assertNotIn("[[FN:", document_xml)
+            self.assertIn('w:type="separator"', footnotes_xml)
+            self.assertIn('w:type="continuationSeparator"', footnotes_xml)
+            self.assertIn("As institutas", footnotes_xml)
+            self.assertIn("p. 42.", footnotes_xml)
+        exported = Document(BytesIO(response.content))
+        body_text = "\n".join(paragraph.text for paragraph in exported.paragraphs)
+        self.assertIn(reference_text, body_text)
+        horton_reference = format_reference(publication)
+        self.assertLess(body_text.index(reference_text), body_text.index(horton_reference))
+
+    def test_citation_note_cannot_use_another_users_reference(self):
+        other_work = Monograph.objects.create(owner=self.other)
+        foreign_text = "AUTOR, Outro. Obra alheia. Recife: Editora, 2020."
+        foreign_reference = ReferenceEntry.objects.create(
+            monograph=other_work,
+            text=foreign_text,
+            checksum=reference_checksum(foreign_text),
+            order=1,
+        )
+        response = self.post_json(
+            reverse("works:create_citation_note", args=[self.work.pk]),
+            {
+                "target_key": "monograph:introduction",
+                "current_text": self.work.introduction,
+                "before_text": self.work.introduction,
+                "source_kind": "imported",
+                "source_id": foreign_reference.pk,
+            },
+        )
+        self.assertEqual(response.status_code, 404)
+
+
+class ReferenceImportParsingTests(TestCase):
+    def test_pdf_lines_are_grouped_into_complete_references(self):
+        text = """
+REFERÊNCIAS
+
+CALVINO, João. As institutas da religião cristã.
+São Paulo: Cultura Cristã, 2006.
+
+HORTON, Michael. A missão da igreja.
+São Paulo: Cultura Cristã, 2012.
+"""
+        references = _references_from_pdf_text(text)
+        self.assertEqual(len(references), 2)
+        self.assertIn("São Paulo: Cultura Cristã, 2006.", references[0])
 
 
 class ABNTFormattingTests(TestCase):

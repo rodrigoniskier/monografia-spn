@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import date
 import json
 import logging
+from pathlib import Path
+import re
 from types import SimpleNamespace
 
 from django.contrib import messages
@@ -21,11 +23,31 @@ from django.utils.text import slugify
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
 from .forms import RegisterForm
-from .guidance import AI_FIELDS, EDITABLE_FIELDS, GROUPS, ONBOARDING_SLIDES, PARTS
-from .models import AIRevision, Monograph, Profile, Publication, Section
+from .guidance import (
+    AI_FIELDS,
+    CITATION_FIELDS,
+    EDITABLE_FIELDS,
+    GROUPS,
+    ONBOARDING_SLIDES,
+    PARTS,
+)
+from .models import (
+    AIRevision,
+    CitationNote,
+    Monograph,
+    Profile,
+    Publication,
+    ReferenceEntry,
+    Section,
+)
 from .services.abnt import citation_label, format_reference, trusted_publication_url
 from .services.ai_gateway import AIGatewayError, revise_text
 from .services.docx_export import build_monograph_docx
+from .services.reference_import import (
+    ReferenceImportError,
+    extract_references,
+    reference_checksum,
+)
 from .services.research import search_publications
 
 
@@ -34,6 +56,10 @@ RESEARCH_SIGNING_SALT = "monografia-spn-publication-v1"
 MAX_TEXT_LENGTH = 120_000
 RESEARCH_RATE_LIMIT = 30
 RESEARCH_RATE_WINDOW = 15 * 60
+FOOTNOTE_TOKEN_RE = re.compile(
+    r"\[\[FN:([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\]\]",
+    re.I,
+)
 
 
 def _json_body(request):
@@ -93,8 +119,145 @@ def _export_checks(work):
         {"label": "Seções de desenvolvimento preenchidas", "done": main_sections.exists() and not main_sections.filter(content="").exists()},
         {"label": "Considerações finais preenchidas", "done": bool(work.conclusion.strip())},
         {"label": "Resumo e palavras-chave preenchidos", "done": bool(work.abstract_pt.strip() and work.keywords_pt.strip())},
-        {"label": "Ao menos uma referência salva", "done": work.publications.exists()},
+        {
+            "label": "Ao menos uma referência salva ou importada",
+            "done": work.publications.exists() or work.reference_entries.exists(),
+        },
     ]
+
+
+def _reference_options(work):
+    options = [
+        {
+            "kind": "imported",
+            "id": reference.pk,
+            "label": reference.text,
+            "meta": f"Lista importada · {reference.source_filename or 'arquivo do autor'}",
+        }
+        for reference in work.reference_entries.all()
+    ]
+    options.extend(
+        {
+            "kind": "publication",
+            "id": publication.pk,
+            "label": format_reference(publication),
+            "meta": f"Pesquisa verificada · {publication.provider}",
+        }
+        for publication in work.publications.all()
+    )
+    return options
+
+
+def _citation_note_json(note):
+    return {
+        "id": note.pk,
+        "marker": str(note.marker),
+        "target_key": note.target_key,
+        "sequence": note.sequence,
+        "text": note.reference_text,
+        "update_url": reverse(
+            "works:update_citation_note", args=[note.monograph_id, note.pk]
+        ),
+        "delete_url": reverse(
+            "works:delete_citation_note", args=[note.monograph_id, note.pk]
+        ),
+    }
+
+
+def _resolve_citation_target(work, target_key):
+    try:
+        target_type, target_id = str(target_key or "").split(":", 1)
+    except ValueError as exc:
+        raise ValueError("Destino da nota inválido.") from exc
+    if target_type == "monograph":
+        if target_id not in CITATION_FIELDS:
+            raise ValueError("Este campo não aceita notas referenciais.")
+        return work, target_id
+    if target_type == "section":
+        section = get_object_or_404(Section, pk=int(target_id), monograph=work)
+        return section, "content"
+    raise ValueError("Destino da nota inválido.")
+
+
+def _save_citation_target(work, target, field_name, value):
+    setattr(target, field_name, value)
+    target.full_clean()
+    target.save(update_fields=[field_name, "updated_at"])
+    if isinstance(target, Section):
+        Monograph.objects.filter(pk=work.pk).update(updated_at=target.updated_at)
+
+
+def _citation_texts_in_document_order(work):
+    for field_name in (
+        "acknowledgements",
+        "confessional_content",
+        "confessional_references",
+        "introduction",
+    ):
+        yield getattr(work, field_name)
+
+    def walk(section):
+        yield section.content
+        for child in section.children.all():
+            yield from walk(child)
+
+    sections = work.sections.filter(parent__isnull=True).prefetch_related(
+        "children__children__children__children"
+    )
+    for section in sections:
+        yield from walk(section)
+    for field_name in ("conclusion", "glossary", "appendices", "annexes"):
+        yield getattr(work, field_name)
+
+
+def _renumber_citation_notes(work):
+    notes = list(work.citation_notes.all())
+    by_marker = {str(note.marker).lower(): note for note in notes}
+    ordered = []
+    seen = set()
+    for text in _citation_texts_in_document_order(work):
+        for marker in FOOTNOTE_TOKEN_RE.findall(str(text or "")):
+            normalized = marker.lower()
+            note = by_marker.get(normalized)
+            if note and normalized not in seen:
+                seen.add(normalized)
+                ordered.append(note)
+    ordered.extend(
+        note
+        for note in sorted(notes, key=lambda item: (item.sequence, item.pk))
+        if str(note.marker).lower() not in seen
+    )
+    if any(note.sequence != sequence for sequence, note in enumerate(ordered, 1)):
+        offset = (max((note.sequence for note in notes), default=0) + len(notes) + 1)
+        for index, note in enumerate(ordered, start=1):
+            note.sequence = offset + index
+            note.save(update_fields=["sequence", "updated_at"])
+        for sequence, note in enumerate(ordered, start=1):
+            note.sequence = sequence
+            note.save(update_fields=["sequence", "updated_at"])
+    return ordered
+
+
+def _validate_citation_markers(work, target_key, text):
+    markers = FOOTNOTE_TOKEN_RE.findall(str(text or ""))
+    if len(markers) != len(set(marker.casefold() for marker in markers)):
+        raise ValidationError("Uma mesma nota não pode aparecer duas vezes no texto.")
+    if not markers:
+        return []
+    notes = list(work.citation_notes.filter(marker__in=markers))
+    if len(notes) != len(markers) or any(note.target_key != target_key for note in notes):
+        raise ValidationError("O texto contém um marcador de nota inválido.")
+    return notes
+
+
+def _remove_orphan_notes(work, target_key, text):
+    markers = FOOTNOTE_TOKEN_RE.findall(str(text or ""))
+    query = work.citation_notes.filter(target_key=target_key)
+    if markers:
+        query = query.exclude(marker__in=markers)
+    query.delete()
+    notes = _renumber_citation_notes(work)
+    return {str(note.marker): note.sequence for note in notes}
 
 
 def home(request):
@@ -171,7 +334,14 @@ def workspace(request, pk, part_slug):
     if part_slug not in PARTS:
         raise Http404("Parte da monografia não encontrada.")
     part = PARTS[part_slug]
-    entries = [{**item, "value": _field_value(work, item)} for item in part.get("fields", [])]
+    entries = [
+        {
+            **item,
+            "value": _field_value(work, item),
+            "citation_enabled": item["name"] in CITATION_FIELDS,
+        }
+        for item in part.get("fields", [])
+    ]
     context = {
         "work": work,
         "part": part,
@@ -183,12 +353,20 @@ def workspace(request, pk, part_slug):
         "publications": work.publications.all(),
         "ai_revisions": work.ai_revisions.filter(user=request.user)[:8],
         "initial_query": work.research_query,
+        "citation_reference_options": _reference_options(work),
+        "citation_notes_data": [
+            _citation_note_json(note) for note in work.citation_notes.all()
+        ],
     }
     if part_slug == "referencias":
         context["reference_rows"] = [
             {"publication": publication, "formatted": format_reference(publication), "citation": citation_label(publication)}
             for publication in work.publications.all()
         ]
+        context["imported_reference_rows"] = list(work.reference_entries.all())
+        context["reference_total"] = (
+            len(context["reference_rows"]) + len(context["imported_reference_rows"])
+        )
     if part_slug == "exportar":
         context["export_checks"] = _export_checks(work)
     template = part.get("template", "works/workspace.html")
@@ -197,6 +375,7 @@ def workspace(request, pk, part_slug):
 
 @login_required
 @require_POST
+@transaction.atomic
 def autosave(request, pk):
     work = _owned_work(request, pk)
     try:
@@ -215,10 +394,16 @@ def autosave(request, pk):
             limit = getattr(model_field, "max_length", None) or MAX_TEXT_LENGTH
             if len(value) > min(limit, MAX_TEXT_LENGTH):
                 return _json_error("O conteúdo excede o limite deste campo.", code="too_large")
+            if field_name in CITATION_FIELDS:
+                target_key = f"monograph:{field_name}"
+                _validate_citation_markers(work, target_key, value)
         setattr(work, field_name, value)
         work.full_clean(exclude=[field.name for field in Monograph._meta.fields if field.name not in {field_name, "owner"}])
         work.save(update_fields=[field_name, "updated_at"])
-        return JsonResponse({"ok": True, "saved_at": work.updated_at.isoformat(), "completion": work.completion_percentage})
+        sequence_map = None
+        if field_name in CITATION_FIELDS:
+            sequence_map = _remove_orphan_notes(work, target_key, value)
+        return JsonResponse({"ok": True, "saved_at": work.updated_at.isoformat(), "completion": work.completion_percentage, "sequence_map": sequence_map})
     except (ValueError, TypeError, ValidationError) as exc:
         message = getattr(exc, "message_dict", None) or str(exc)
         return _json_error(message)
@@ -253,6 +438,7 @@ def add_section(request, pk):
 
 @login_required
 @require_POST
+@transaction.atomic
 def update_section(request, pk, section_id):
     work = _owned_work(request, pk)
     section = get_object_or_404(Section, pk=section_id, monograph=work)
@@ -267,21 +453,40 @@ def update_section(request, pk, section_id):
             return _json_error("A seção precisa de um título.")
         if len(value) > limit:
             return _json_error("O conteúdo excede o limite permitido.", code="too_large")
+        if field_name == "content":
+            target_key = f"section:{section.pk}"
+            _validate_citation_markers(work, target_key, value)
         setattr(section, field_name, value.strip() if field_name == "title" else value)
         section.full_clean()
         section.save(update_fields=[field_name, "updated_at"])
         Monograph.objects.filter(pk=work.pk).update(updated_at=section.updated_at)
-        return JsonResponse({"ok": True, "saved_at": section.updated_at.isoformat(), "completion": work.completion_percentage})
+        sequence_map = None
+        if field_name == "content":
+            sequence_map = _remove_orphan_notes(work, target_key, value)
+        return JsonResponse({"ok": True, "saved_at": section.updated_at.isoformat(), "completion": work.completion_percentage, "sequence_map": sequence_map})
     except (ValueError, ValidationError) as exc:
         return _json_error(str(exc))
 
 
 @login_required
 @require_POST
+@transaction.atomic
 def delete_section(request, pk, section_id):
     work = _owned_work(request, pk)
     section = get_object_or_404(Section, pk=section_id, monograph=work)
+    descendant_ids = [section.pk]
+    pending = [section.pk]
+    while pending:
+        children = list(
+            work.sections.filter(parent_id__in=pending).values_list("pk", flat=True)
+        )
+        descendant_ids.extend(children)
+        pending = children
+    work.citation_notes.filter(
+        target_key__in=[f"section:{item}" for item in descendant_ids]
+    ).delete()
     section.delete()
+    _renumber_citation_notes(work)
     Monograph.objects.filter(pk=work.pk).update(updated_at=timezone.now())
     return JsonResponse({"ok": True, "completion": work.completion_percentage})
 
@@ -344,6 +549,17 @@ def accept_revision(request, pk, revision_id):
             target = get_object_or_404(Section, pk=int(target_id), monograph=work)
             if target.content != revision.original_text:
                 return _json_error("O texto mudou após a revisão. Solicite uma nova análise para não sobrescrever suas alterações.", status=409, code="stale")
+            if sorted(FOOTNOTE_TOKEN_RE.findall(revision.original_text)) != sorted(
+                FOOTNOTE_TOKEN_RE.findall(revision.proposed_text)
+            ):
+                return _json_error(
+                    "A IA alterou um marcador de nota. O texto proposto não foi aplicado.",
+                    status=409,
+                    code="citation_changed",
+                )
+            _validate_citation_markers(
+                work, revision.target_key, revision.proposed_text
+            )
             target.content = revision.proposed_text
             target.save(update_fields=["content", "updated_at"])
         else:
@@ -351,11 +567,28 @@ def accept_revision(request, pk, revision_id):
                 return _json_error("Destino da revisão inválido.", status=403)
             if getattr(work, target_id) != revision.original_text:
                 return _json_error("O texto mudou após a revisão. Solicite uma nova análise para não sobrescrever suas alterações.", status=409, code="stale")
+            if sorted(FOOTNOTE_TOKEN_RE.findall(revision.original_text)) != sorted(
+                FOOTNOTE_TOKEN_RE.findall(revision.proposed_text)
+            ):
+                return _json_error(
+                    "A IA alterou um marcador de nota. O texto proposto não foi aplicado.",
+                    status=409,
+                    code="citation_changed",
+                )
+            _validate_citation_markers(
+                work, revision.target_key, revision.proposed_text
+            )
             setattr(work, target_id, revision.proposed_text)
             work.save(update_fields=[target_id, "updated_at"])
         revision.accepted = True
         revision.save(update_fields=["accepted"])
-        return JsonResponse({"ok": True, "text": revision.proposed_text, "completion": work.completion_percentage})
+        notes = _renumber_citation_notes(work)
+        return JsonResponse({
+            "ok": True,
+            "text": revision.proposed_text,
+            "completion": work.completion_percentage,
+            "sequence_map": {str(note.marker): note.sequence for note in notes},
+        })
     except (ValueError, TypeError) as exc:
         return _json_error(str(exc))
 
@@ -428,6 +661,199 @@ def delete_publication(request, pk, publication_id):
     publication.delete()
     Monograph.objects.filter(pk=work.pk).update(updated_at=timezone.now())
     return JsonResponse({"ok": True})
+
+
+@login_required
+@require_POST
+def import_references(request, pk):
+    work = _owned_work(request, pk)
+    uploaded = request.FILES.get("reference_file")
+    if not uploaded:
+        messages.error(request, "Selecione um arquivo DOCX ou PDF para importar.")
+        return redirect("works:workspace", pk=work.pk, part_slug="referencias")
+    try:
+        references = extract_references(uploaded)
+        filename = Path(str(uploaded.name or "lista-de-referencias")).name[:255]
+        with transaction.atomic():
+            locked_work = get_object_or_404(
+                Monograph.objects.select_for_update(), pk=work.pk, owner=request.user
+            )
+            existing = set(
+                locked_work.reference_entries.values_list("checksum", flat=True)
+            )
+            next_order = (
+                locked_work.reference_entries.aggregate(value=Max("order"))["value"] or 0
+            ) + 1
+            rows = []
+            for reference in references:
+                checksum = reference_checksum(reference)
+                if checksum in existing:
+                    continue
+                existing.add(checksum)
+                rows.append(
+                    ReferenceEntry(
+                        monograph=locked_work,
+                        text=reference,
+                        source_filename=filename,
+                        checksum=checksum,
+                        order=next_order,
+                    )
+                )
+                next_order += 1
+            ReferenceEntry.objects.bulk_create(rows)
+            Monograph.objects.filter(pk=locked_work.pk).update(updated_at=timezone.now())
+        ignored = len(references) - len(rows)
+        if rows:
+            detail = f" {ignored} duplicada(s) foram ignoradas." if ignored else ""
+            messages.success(
+                request,
+                f"{len(rows)} referência(s) importada(s) com sucesso.{detail}",
+            )
+        else:
+            messages.info(request, "Todas as referências do arquivo já estavam salvas.")
+    except ReferenceImportError as exc:
+        messages.error(request, str(exc))
+    except IntegrityError:
+        messages.error(request, "A lista mudou durante a importação. Tente novamente.")
+    return redirect("works:workspace", pk=work.pk, part_slug="referencias")
+
+
+@login_required
+@require_POST
+def delete_reference_entry(request, pk, reference_id):
+    work = _owned_work(request, pk)
+    reference = get_object_or_404(
+        ReferenceEntry, pk=reference_id, monograph=work
+    )
+    reference.delete()
+    Monograph.objects.filter(pk=work.pk).update(updated_at=timezone.now())
+    return JsonResponse({"ok": True})
+
+
+@login_required
+@require_POST
+@transaction.atomic
+def create_citation_note(request, pk):
+    work = get_object_or_404(
+        Monograph.objects.select_for_update(), pk=pk, owner=request.user
+    )
+    try:
+        payload = _json_body(request)
+        target_key = str(payload.get("target_key") or "")
+        target, field_name = _resolve_citation_target(work, target_key)
+        current_text = str(getattr(target, field_name) or "")
+        client_text = str(payload.get("current_text") or "")
+        before_text = str(payload.get("before_text") or "")
+        if client_text != current_text:
+            return _json_error(
+                "O texto mudou antes da inclusão. Feche a janela e tente novamente.",
+                status=409,
+                code="stale",
+            )
+        if not current_text.startswith(before_text):
+            return _json_error("A posição do cursor não pôde ser confirmada.", code="cursor")
+
+        source_kind = str(payload.get("source_kind") or "")
+        source_id = int(payload.get("source_id"))
+        reference_entry = None
+        publication = None
+        if source_kind == "imported":
+            reference_entry = get_object_or_404(
+                ReferenceEntry, pk=source_id, monograph=work
+            )
+            reference_text = reference_entry.text
+        elif source_kind == "publication":
+            publication = get_object_or_404(Publication, pk=source_id, monograph=work)
+            reference_text = format_reference(publication)
+        else:
+            return _json_error("Escolha uma referência válida.")
+
+        locator = re.sub(r"\s+", " ", str(payload.get("locator") or "")).strip()
+        if len(locator) > 180:
+            return _json_error("A página ou localização excede 180 caracteres.")
+        if locator:
+            reference_text = f"{reference_text.rstrip()} {locator}"
+        if len(reference_text) > 4000:
+            return _json_error("O texto da nota excede 4.000 caracteres.")
+
+        sequence = (
+            work.citation_notes.aggregate(value=Max("sequence"))["value"] or 0
+        ) + 1
+        note = CitationNote(
+            monograph=work,
+            target_key=target_key,
+            sequence=sequence,
+            reference_text=reference_text,
+            reference_entry=reference_entry,
+            publication=publication,
+        )
+        updated_text = f"{before_text}{note.token}{current_text[len(before_text):]}"
+        note.full_clean()
+        _save_citation_target(work, target, field_name, updated_text)
+        note.save()
+        notes = _renumber_citation_notes(work)
+        note.refresh_from_db()
+        return JsonResponse(
+            {
+                "ok": True,
+                "text": updated_text,
+                "note": _citation_note_json(note),
+                "sequence_map": {
+                    str(item.marker): item.sequence for item in notes
+                },
+                "completion": work.completion_percentage,
+            }
+        )
+    except (TypeError, ValueError, ValidationError) as exc:
+        return _json_error(str(exc))
+
+
+@login_required
+@require_POST
+def update_citation_note(request, pk, note_id):
+    work = _owned_work(request, pk)
+    note = get_object_or_404(CitationNote, pk=note_id, monograph=work)
+    try:
+        payload = _json_body(request)
+        text = re.sub(r"\s+", " ", str(payload.get("text") or "")).strip()
+        if not text:
+            return _json_error("A nota referencial não pode ficar vazia.")
+        if len(text) > 4000:
+            return _json_error("A nota referencial excede 4.000 caracteres.")
+        note.reference_text = text
+        note.full_clean()
+        note.save(update_fields=["reference_text", "updated_at"])
+        return JsonResponse({"ok": True, "note": _citation_note_json(note)})
+    except ValidationError as exc:
+        return _json_error(str(exc))
+
+
+@login_required
+@require_POST
+@transaction.atomic
+def delete_citation_note(request, pk, note_id):
+    work = get_object_or_404(
+        Monograph.objects.select_for_update(), pk=pk, owner=request.user
+    )
+    note = get_object_or_404(CitationNote, pk=note_id, monograph=work)
+    try:
+        target, field_name = _resolve_citation_target(work, note.target_key)
+        updated_text = str(getattr(target, field_name) or "").replace(note.token, "")
+        _save_citation_target(work, target, field_name, updated_text)
+        note.delete()
+        notes = _renumber_citation_notes(work)
+        return JsonResponse(
+            {
+                "ok": True,
+                "text": updated_text,
+                "sequence_map": {
+                    str(item.marker): item.sequence for item in notes
+                },
+                "completion": work.completion_percentage,
+            }
+        )
+    except (TypeError, ValueError, ValidationError) as exc:
+        return _json_error(str(exc))
 
 
 @login_required
