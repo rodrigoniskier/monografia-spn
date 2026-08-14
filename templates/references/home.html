@@ -1,0 +1,85 @@
+{% extends "references/base.html" %}
+{% block title %}CitaRN — referências sem atrito{% endblock %}
+{% block body_class %}landing{% endblock %}
+{% block content %}
+<section class="hero">
+  <div class="shell hero-inner">
+    <div>
+      <span class="hero-kicker">Seu acervo acadêmico, sob controle</span>
+      <h1>Da fonte bruta à referência <em>pronta para usar.</em></h1>
+      <p class="hero-copy">Importe artigos, documentos, apresentações e URLs. Revise os metadados uma vez, reaproveite em vários projetos e gere listas no padrão exigido pelo seu trabalho.</p>
+      <div class="hero-actions">
+        <a class="button button-gold" href="{% url 'works:register' %}">Começar gratuitamente</a>
+        <a class="button button-secondary" href="#como-funciona">Ver como funciona</a>
+      </div>
+      <div class="hero-proof">
+        <span>PDF, DOCX, PPTX e URL</span>
+        <span>Biblioteca privada por usuário</span>
+        <span>Revisão humana preservada</span>
+      </div>
+    </div>
+    <div class="product-preview" aria-label="Prévia ilustrativa do painel do CitaRN">
+      <div class="preview-window">
+        <div class="preview-top"><i class="preview-dot"></i><i class="preview-dot"></i><i class="preview-dot"></i></div>
+        <div class="preview-content">
+          <div class="preview-side">
+            <div class="preview-side-line"></div><div class="preview-side-line"></div><div class="preview-side-line"></div>
+          </div>
+          <div class="preview-main">
+            <div class="preview-label"></div>
+            <div class="preview-heading"></div>
+            <div class="preview-cards"><div class="preview-card"></div><div class="preview-card"></div><div class="preview-card"></div></div>
+            <div class="preview-list"><div class="preview-row"></div><div class="preview-row"></div><div class="preview-row"></div><div class="preview-row"></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="floating-format" aria-hidden="true"><span>ABNT</span><span>APA</span><span>Vancouver</span></div>
+    </div>
+  </div>
+</section>
+
+<section id="como-funciona" class="landing-section">
+  <div class="shell">
+    <div class="section-heading">
+      <p class="eyebrow">Fluxo simples e auditável</p>
+      <h2>Três passos entre a coleta e a bibliografia</h2>
+      <p>A automação reduz o trabalho repetitivo; você continua decidindo o que entra no texto final.</p>
+    </div>
+    <div class="grid grid-3">
+      <article class="card feature-card">
+        <span class="feature-number">1</span>
+        <h3>Importe suas fontes</h3>
+        <p>Envie PDF, DOCX e PPTX ou cole URLs e DOIs. O CitaRN procura título, autoria, ano, periódico e outros identificadores.</p>
+      </article>
+      <article class="card feature-card">
+        <span class="feature-number">2</span>
+        <h3>Revise os dados</h3>
+        <p>Campos incertos ficam sinalizados. Você corrige a referência uma vez e a mantém em sua biblioteca pessoal.</p>
+      </article>
+      <article class="card feature-card">
+        <span class="feature-number">3</span>
+        <h3>Gere e exporte</h3>
+        <p>Escolha as fontes do projeto, aplique o estilo desejado e exporte a lista em DOCX, PDF ou texto simples.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<section class="trust-band">
+  <div class="shell trust-inner">
+    <strong>Um acervo. Vários projetos. Diversos padrões.</strong>
+    <div class="style-cloud"><span>ABNT 6023:2018</span><span>APA 7</span><span>Vancouver</span><span>Chicago</span><span>Harvard</span><span>IEEE</span></div>
+  </div>
+</section>
+
+<section class="landing-section alt">
+  <div class="shell">
+    <div class="section-heading">
+      <p class="eyebrow">Projetado para trabalho acadêmico real</p>
+      <h2>Automação com transparência, não uma caixa-preta</h2>
+      <p>O arquivo original permanece vinculado à referência, cada usuário acessa apenas o próprio acervo e nenhuma extração automática é tratada como infalível.</p>
+      <div style="margin-top: 25px"><a class="button button-primary" href="{% url 'works:register' %}">Criar minha biblioteca</a></div>
+    </div>
+  </div>
+</section>
+{% endblock %}

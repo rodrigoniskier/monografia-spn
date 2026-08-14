@@ -1,0 +1,19 @@
+{% extends "references/base.html" %}
+{% block title %}{{ title }} — CitaRN{% endblock %}
+{% block content %}
+<section class="page"><div class="shell">
+  <nav class="breadcrumb"><a href="{% url 'references:project_list' %}">Projetos</a><span>/</span><span>{{ title }}</span></nav>
+  <div class="card form-card">
+    <div class="form-section"><p class="eyebrow">Estrutura do trabalho</p><h1 class="page-title">{{ title }}</h1><p class="page-intro">Você poderá alterar esses dados a qualquer momento.</p></div>
+    <form method="post">{% csrf_token %}
+      {% if form.non_field_errors %}<div class="form-section"><div class="form-errors">{{ form.non_field_errors }}</div></div>{% endif %}
+      <div class="form-section"><div class="field-grid">
+        <div class="field field-full"><label for="{{ form.name.id_for_label }}">{{ form.name.label }}</label>{{ form.name }}{{ form.name.errors }}</div>
+        <div class="field field-full"><label for="{{ form.description.id_for_label }}">{{ form.description.label }}</label>{{ form.description }}{{ form.description.errors }}<span class="field-help">Ex.: objetivo do trabalho, turma, orientação ou etapa da pesquisa.</span></div>
+        <div class="field"><label for="{{ form.default_style.id_for_label }}">{{ form.default_style.label }}</label>{{ form.default_style }}{{ form.default_style.errors }}</div>
+      </div></div>
+      <div class="form-actions"><a class="button button-secondary" href="{% if project %}{{ project.get_absolute_url }}{% else %}{% url 'references:project_list' %}{% endif %}">Cancelar</a><button class="button button-primary" type="submit">Salvar projeto</button></div>
+    </form>
+  </div>
+</div></section>
+{% endblock %}

@@ -1,0 +1,23 @@
+{% extends "references/base.html" %}
+{% load ref_tags %}
+{% block title %}{{ project.name }} — CitaRN{% endblock %}
+{% block content %}
+<section class="page"><div class="shell">
+  <nav class="breadcrumb"><a href="{% url 'references:project_list' %}">Projetos</a><span>/</span><span>{{ project.name }}</span></nav>
+  <header class="page-head"><div><p class="eyebrow">Projeto · {{ project.default_style|style_label }}</p><h1 class="page-title">{{ project.name }}</h1>{% if project.description %}<p class="page-intro">{{ project.description }}</p>{% endif %}</div><div class="head-actions"><a class="button button-secondary" href="{% url 'references:add_existing' project.pk %}">Usar da biblioteca</a><a class="button button-primary" href="{% url 'references:import_sources' project.pk %}">+ Importar fontes</a></div></header>
+  <div class="content-layout">
+    <div>
+      <div class="toolbar"><form class="search-form" method="get"><label class="sr-only" for="ref-search">Buscar referência</label><input id="ref-search" type="search" name="q" value="{{ query }}" placeholder="Buscar por título, DOI ou periódico"><button class="button button-secondary" type="submit">Buscar</button></form><a class="button button-ghost" href="{% url 'references:reference_create' %}?projeto={{ project.pk }}">Cadastrar manualmente</a></div>
+      <section class="card">
+        {% if links %}<div class="list">{% for link in links %}{% with reference=link.reference %}
+          <article class="list-item"><div><div class="item-kicker"><span class="badge">{{ reference.source_kind|source_label }}</span><span class="badge badge-{{ reference.extraction_status }}">{{ reference.get_extraction_status_display }}</span></div><a class="item-title" href="{% url 'references:reference_edit' reference.pk %}?next={{ request.path|urlencode }}">{{ reference.title }}</a><p class="item-meta"><span>{{ reference.authors|author_short }}</span><span>{{ reference.year|default:"Ano não informado" }}</span>{% if reference.container_title %}<span>{{ reference.container_title|truncatechars:50 }}</span>{% endif %}{% if reference.doi %}<span>DOI {{ reference.doi }}</span>{% endif %}</p>{% if reference.extraction_warnings and reference.extraction_status == 'review' %}<ul class="warning-list">{% for warning in reference.extraction_warnings|slice:":2" %}<li>{{ warning }}</li>{% endfor %}</ul>{% endif %}</div><div class="item-actions">{% if reference.source_file %}<a class="button button-small button-secondary" href="{% url 'references:reference_file' reference.pk %}">Arquivo</a>{% endif %}<a class="button button-small button-secondary" href="{% url 'references:reference_edit' reference.pk %}?next={{ request.path|urlencode }}">Revisar</a><form method="post" action="{% url 'references:remove_from_project' project.pk reference.pk %}">{% csrf_token %}<button class="button button-small button-ghost" type="submit" title="Remover apenas deste projeto">Remover</button></form></div></article>
+        {% endwith %}{% endfor %}</div>{% else %}<div class="empty-state"><div class="empty-icon">R</div><h2>{% if query %}Nenhuma referência encontrada{% else %}Este projeto ainda está vazio{% endif %}</h2><p>{% if query %}Tente outro termo de busca.{% else %}Importe arquivos e URLs ou reutilize itens já revisados da sua biblioteca.{% endif %}</p>{% if not query %}<a class="button button-primary" href="{% url 'references:import_sources' project.pk %}">Importar primeira fonte</a>{% endif %}</div>{% endif %}
+      </section>
+    </div>
+    <aside class="sidebar-stack">
+      <section class="card"><div class="card-body"><p class="eyebrow">Próximo passo</p><h3 style="margin:0 0 8px">Monte a lista final</h3><p style="margin:0 0 17px;color:var(--muted);font-size:13px">Escolha quais referências entram, confira o estilo e exporte.</p><a class="button button-primary" style="width:100%" href="{% url 'references:generate_list' project.pk %}">Gerar referências</a></div></section>
+      <section class="card"><div class="card-body"><h3 style="margin:0 0 12px">Gerenciar projeto</h3><div style="display:grid;gap:8px"><a class="button button-secondary" href="{% url 'references:project_update' project.pk %}">Editar informações</a><a class="button button-danger" href="{% url 'references:project_delete' project.pk %}">Excluir projeto</a></div></div></section>
+    </aside>
+  </div>
+</div></section>
+{% endblock %}

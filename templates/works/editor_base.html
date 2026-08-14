@@ -29,6 +29,7 @@
     </nav>
     <div class="sidebar-footer">
       <div class="sidebar-footer__actions">
+        <a href="{% url 'references:dashboard' %}">CitaRN · Referências</a>
         <a href="{% url 'works:onboarding' %}">Orientações iniciais</a>
         <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button type="submit">Sair</button></form>
       </div>

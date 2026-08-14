@@ -1,0 +1,14 @@
+{% extends "references/base.html" %}
+{% load ref_tags %}
+{% block title %}Projetos — CitaRN{% endblock %}
+{% block content %}
+<section class="page"><div class="shell">
+  <header class="page-head"><div><p class="eyebrow">Organização por trabalho</p><h1 class="page-title">Seus projetos</h1><p class="page-intro">Cada projeto reúne uma seleção independente da sua biblioteca de referências.</p></div><div class="head-actions"><a class="button button-primary" href="{% url 'references:project_create' %}">+ Novo projeto</a></div></header>
+  <div class="toolbar"><form class="search-form" method="get"><label class="sr-only" for="project-search">Buscar projeto</label><input id="project-search" type="search" name="q" value="{{ query }}" placeholder="Buscar por nome ou descrição"><button class="button button-secondary" type="submit">Buscar</button></form></div>
+  <section class="card">
+    {% if projects %}<div class="list">{% for project in projects %}
+      <article class="list-item"><div><div class="item-kicker"><span class="badge">{{ project.default_style|style_label }}</span></div><a class="item-title" href="{{ project.get_absolute_url }}">{{ project.name }}</a>{% if project.description %}<p class="item-meta"><span>{{ project.description|truncatechars:100 }}</span></p>{% endif %}<p class="item-meta"><span>{{ project.reference_count }} referência{{ project.reference_count|pluralize }}</span><span>Atualizado em {{ project.updated_at|date:"d/m/Y \à\s H:i" }}</span></p></div><div class="item-actions"><a class="button button-small button-secondary" href="{% url 'references:project_update' project.pk %}">Editar</a><a class="button button-small button-primary" href="{{ project.get_absolute_url }}">Abrir</a></div></article>
+    {% endfor %}</div>{% else %}<div class="empty-state"><div class="empty-icon">P</div><h2>{% if query %}Nenhum projeto encontrado{% else %}Crie seu primeiro projeto{% endif %}</h2><p>{% if query %}Tente outro termo de busca.{% else %}Use projetos para separar uma monografia, artigo, aula, revisão ou linha de pesquisa.{% endif %}</p>{% if not query %}<a class="button button-primary" href="{% url 'references:project_create' %}">Criar projeto</a>{% endif %}</div>{% endif %}
+  </section>
+</div></section>
+{% endblock %}

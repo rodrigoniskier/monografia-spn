@@ -21,6 +21,18 @@ Aplicativo web para orientar alunos do Seminário Presbiteriano do Norte (SPN) d
 - capa com marca do SPN, folha de rosto, aprovação e elementos pré-textuais calibrados pelos modelos institucionais de 2025;
 - interface responsiva e sem dependência de CDN.
 
+## CitaRN integrado
+
+O mesmo login também dá acesso ao gerenciador CitaRN em `/referencias/`. Ele
+mantém uma biblioteca bibliográfica pessoal, permite múltiplos projetos e
+importa PDF, DOCX, PPTX, URL ou DOI para revisão dos metadados. Cada projeto
+pode selecionar e ordenar as fontes e exportar a lista em ABNT, APA, Vancouver,
+Chicago autor-data, Harvard ou IEEE, nos formatos DOCX, PDF e TXT.
+
+Os arquivos enviados ficam em `media/` e só podem ser baixados pelo proprietário
+autenticado. Os modelos do CitaRN usam tabelas próprias e não alteram nem apagam
+monografias, referências ou notas já existentes no Monografia SPN.
+
 ## Padrão acadêmico adotado
 
 A estrutura combina os elementos recorrentes das monografias fornecidas pelo SPN com as normas vigentes:
@@ -105,6 +117,10 @@ Na área **Referências**, o autor pode importar um DOCX ou PDF de até 5 MB. Pa
 
 Os testes cobrem acesso por proprietário, salvamento, hierarquia de seções, aceite seguro de revisão, assinatura de resultados bibliográficos, importação de listas, notas referenciais, validação de URLs, contrato da Gemini API e estrutura do DOCX.
 
+A suíte também cobre o isolamento da biblioteca CitaRN, os seis estilos
+bibliográficos, a importação de DOCX, a seleção por projeto, as exportações e a
+navegação compartilhada entre os dois ambientes.
+
 ## Implantação no PythonAnywhere
 
 O roteiro específico da conta `monografiaspn` está em [deploy/PYTHONANYWHERE.md](deploy/PYTHONANYWHERE.md). Depois da primeira implantação, atualizações podem ser aplicadas com:
@@ -114,3 +130,7 @@ bash deploy/update_pythonanywhere.sh
 ```
 
 O recarregamento do Web App continua sendo feito no painel do PythonAnywhere.
+
+O script cria um backup datado do SQLite em `backups/` antes de aplicar
+migrações. O diretório não é versionado e deve ser revisado periodicamente para
+não consumir todo o espaço da conta.

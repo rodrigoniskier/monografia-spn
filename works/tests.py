@@ -109,6 +109,11 @@ class AppTestCase(TestCase):
         self.assertContains(references, 'accept=".docx,.pdf,')
         self.assertContains(references, "Importar lista pronta")
 
+    def test_dashboard_links_to_citarn(self):
+        response = self.client.get(reverse("works:dashboard"))
+        self.assertContains(response, reverse("references:dashboard"))
+        self.assertContains(response, "CitaRN")
+
     def test_new_monograph_has_spn_structure_starters(self):
         response = self.client.post(reverse("works:create_monograph"))
         created = Monograph.objects.filter(owner=self.user).latest("created_at")
