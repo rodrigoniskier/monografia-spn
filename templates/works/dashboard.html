@@ -5,6 +5,7 @@
 <header class="site-header">
   <a class="brand" href="{% url 'works:dashboard' %}"><span class="brand__mark">SPN</span><span><strong>Monografia</strong><small>Ambiente de escrita acadêmica</small></span></a>
   <nav class="site-header__actions" aria-label="Conta">
+    <a class="text-button" href="{% url 'references:dashboard' %}">CitaRN</a>
     <a class="text-button" href="{% url 'works:onboarding' %}">Como funciona</a>
     <span class="user-chip"><span>{{ request.user.get_full_name|default:request.user.username|slice:":1" }}</span>{{ request.user.get_full_name|default:request.user.username }}</span>
     <form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="text-button" type="submit">Sair</button></form>
@@ -48,4 +49,3 @@
   {% endif %}
 </main>
 {% endblock %}
-

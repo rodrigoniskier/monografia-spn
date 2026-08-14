@@ -1,4 +1,5 @@
 """Configurações do projeto Monografia SPN."""
+
 from pathlib import Path
 import os
 
@@ -14,7 +15,9 @@ def env_bool(name: str, default: bool = False) -> bool:
 
 
 def env_list(name: str, default: str = "") -> list[str]:
-    return [item.strip() for item in os.getenv(name, default).split(",") if item.strip()]
+    return [
+        item.strip() for item in os.getenv(name, default).split(",") if item.strip()
+    ]
 
 
 APP_ENV = os.getenv("APP_ENV", "development").strip().lower()
@@ -43,6 +46,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "works.apps.WorksConfig",
+    "references.apps.ReferencesConfig",
 ]
 
 MIDDLEWARE = [
@@ -86,7 +90,9 @@ DATABASES = {
 }
 
 AUTH_PASSWORD_VALIDATORS = [
-    {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
+    {
+        "NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"
+    },
     {"NAME": "django.contrib.auth.password_validation.MinimumLengthValidator"},
     {"NAME": "django.contrib.auth.password_validation.CommonPasswordValidator"},
     {"NAME": "django.contrib.auth.password_validation.NumericPasswordValidator"},
@@ -100,6 +106,8 @@ USE_TZ = True
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 STATICFILES_DIRS = [BASE_DIR / "static"]
+MEDIA_URL = "/media/"
+MEDIA_ROOT = Path(os.getenv("MEDIA_ROOT", str(BASE_DIR / "media")))
 STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
     "staticfiles": {
@@ -116,7 +124,11 @@ LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "works:home"
 LOGOUT_REDIRECT_URL = "login"
 
-DATA_UPLOAD_MAX_MEMORY_SIZE = 2 * 1024 * 1024
+DATA_UPLOAD_MAX_MEMORY_SIZE = 60 * 1024 * 1024
+FILE_UPLOAD_MAX_MEMORY_SIZE = 5 * 1024 * 1024
+MAX_UPLOAD_FILE_SIZE = int(os.getenv("MAX_UPLOAD_FILE_SIZE", str(20 * 1024 * 1024)))
+MAX_FILES_PER_IMPORT = int(os.getenv("MAX_FILES_PER_IMPORT", "10"))
+URL_FETCH_MAX_BYTES = int(os.getenv("URL_FETCH_MAX_BYTES", str(3 * 1024 * 1024)))
 SESSION_COOKIE_HTTPONLY = True
 CSRF_COOKIE_HTTPONLY = False  # Necessário para o autosave via fetch com token CSRF.
 X_FRAME_OPTIONS = "DENY"
@@ -129,6 +141,7 @@ if not DEBUG:
     CSRF_COOKIE_SECURE = True
     SECURE_HSTS_SECONDS = int(os.getenv("DJANGO_HSTS_SECONDS", "31536000"))
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = env_bool("DJANGO_HSTS_PRELOAD", True)
 
 CACHES = {
     "default": {
@@ -141,11 +154,15 @@ CACHES = {
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.6-flash").strip()
-GEMINI_FALLBACK_MODEL = os.getenv("GEMINI_FALLBACK_MODEL", "gemini-3.5-flash-lite").strip()
+GEMINI_FALLBACK_MODEL = os.getenv(
+    "GEMINI_FALLBACK_MODEL", "gemini-3.5-flash-lite"
+).strip()
 GEMINI_TIMEOUT_MS = int(os.getenv("GEMINI_TIMEOUT_MS", "30000"))
 RESEARCH_CONTACT_EMAIL = os.getenv(
     "RESEARCH_CONTACT_EMAIL", "niskier.rodrigo@gmail.com"
 ).strip()
+CROSSREF_ENRICH = env_bool("CROSSREF_ENRICH", True)
+CROSSREF_MAILTO = os.getenv("CROSSREF_MAILTO", RESEARCH_CONTACT_EMAIL).strip()
 
 LOGGING = {
     "version": 1,
@@ -153,8 +170,14 @@ LOGGING = {
     "formatters": {
         "standard": {"format": "{asctime} {levelname} {name} {message}", "style": "{"}
     },
-    "handlers": {"console": {"class": "logging.StreamHandler", "formatter": "standard"}},
+    "handlers": {
+        "console": {"class": "logging.StreamHandler", "formatter": "standard"}
+    },
     "loggers": {
         "works": {"handlers": ["console"], "level": os.getenv("APP_LOG_LEVEL", "INFO")},
+        "references": {
+            "handlers": ["console"],
+            "level": os.getenv("APP_LOG_LEVEL", "INFO"),
+        },
     },
 }

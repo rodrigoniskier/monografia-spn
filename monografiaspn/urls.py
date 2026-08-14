@@ -11,6 +11,6 @@ urlpatterns = [
         name="login",
     ),
     path("sair/", auth_views.LogoutView.as_view(), name="logout"),
+    path("referencias/", include("references.urls", namespace="references")),
     path("", include("works.urls")),
 ]
-

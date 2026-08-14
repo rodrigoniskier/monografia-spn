@@ -1,0 +1,23 @@
+{% extends "references/base.html" %}
+{% load ref_tags %}
+{% block title %}Gerar referências — {{ project.name }}{% endblock %}
+{% block content %}
+<section class="page"><div class="shell">
+  <nav class="breadcrumb"><a href="{{ project.get_absolute_url }}">{{ project.name }}</a><span>/</span><span>Gerar lista</span></nav>
+  <header class="page-head"><div><p class="eyebrow">Composição final</p><h1 class="page-title">Lista de referências</h1><p class="page-intro">Selecione os itens, escolha o padrão e exporte a versão pronta para revisão final.</p></div></header>
+  <div class="content-layout">
+    <section>
+      {% if citations %}<article class="citation-sheet style-{{ project.default_style }}"><h2>REFERÊNCIAS</h2>{% for citation in citations %}<p class="citation-entry" data-citation>{{ citation|citation_html }}</p>{% endfor %}</article>{% else %}<div class="card empty-state"><div class="empty-icon">R</div><h2>Nenhuma referência selecionada</h2><p>Use o painel ao lado para escolher os itens que entrarão na lista.</p></div>{% endif %}
+    </section>
+    <aside class="sidebar-stack" style="display:grid;grid-template-columns:1fr">
+      <form class="card" method="post">{% csrf_token %}<div class="card-header"><h3>Configurar lista</h3></div><div class="card-body">
+        <div class="field"><label for="style">Padrão bibliográfico</label><select id="style" name="style">{% for value,label in citation_styles %}<option value="{{ value }}" {% if project.default_style == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+        <div class="select-all-bar" style="margin-top:18px"><label class="check-row"><input type="checkbox" data-select-all=".project-ref-check"><span>Marcar todas</span></label></div>
+        <div class="selection-list" style="max-height:310px">{% for link in links %}<div class="selection-item has-position"><input class="project-ref-check" id="sel-{{ link.reference_id }}" type="checkbox" name="references" value="{{ link.reference_id }}" {% if link.included %}checked{% endif %}><label for="sel-{{ link.reference_id }}"><strong>{{ link.reference.title|truncatechars:65 }}</strong><small>{{ link.reference.authors|author_short }} · {{ link.reference.year|default:"sem ano" }}</small></label><input class="position-input" type="number" min="0" max="10000" name="position_{{ link.reference_id }}" value="{{ link.position }}" aria-label="Ordem de {{ link.reference.title }}" title="Ordem em Vancouver e IEEE"></div>{% empty %}<div style="padding:18px;color:var(--muted);font-size:13px">O projeto ainda não possui referências.</div>{% endfor %}</div>
+      </div><div class="card-footer"><button class="button button-primary" style="width:100%" type="submit">Atualizar visualização</button></div></form>
+      {% if citations %}<section class="card"><div class="card-header"><h3>Exportar</h3></div><div class="card-body"><div class="export-row"><a class="export-option" href="{% url 'references:export_project' project.pk 'docx' %}">DOCX</a><a class="export-option" href="{% url 'references:export_project' project.pk 'pdf' %}">PDF</a><a class="export-option" href="{% url 'references:export_project' project.pk 'txt' %}">TXT</a></div><button class="button button-secondary" style="width:100%;margin-top:10px" type="button" data-copy-list>Copiar lista</button><button class="button button-ghost" style="width:100%;margin-top:4px" type="button" data-print-list>Imprimir</button></div></section>{% endif %}
+      <a class="button button-secondary" href="{{ project.get_absolute_url }}">Voltar ao projeto</a>
+    </aside>
+  </div>
+</div></section>
+{% endblock %}

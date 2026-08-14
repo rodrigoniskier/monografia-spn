@@ -1,0 +1,77 @@
+{% load static %}
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="CitaRN — organize fontes e gere listas de referências acadêmicas com segurança.">
+  <title>{% block title %}CitaRN{% endblock %}</title>
+  <link rel="stylesheet" href="{% static 'references/css/app.css' %}">
+  <script src="{% static 'references/js/app.js' %}" defer></script>
+</head>
+<body class="{% block body_class %}{% endblock %}">
+  <a class="skip-link" href="#conteudo">Pular para o conteúdo</a>
+  <header class="site-header">
+    <div class="shell header-inner">
+      <a class="brand" href="{% url 'references:home' %}" aria-label="CitaRN — página inicial">
+        <span class="brand-mark" aria-hidden="true"><span>C</span></span>
+        <span class="brand-copy"><strong>CitaRN</strong><small>Referências sem atrito</small></span>
+      </a>
+      <button class="menu-toggle" type="button" data-menu-toggle aria-expanded="false" aria-controls="main-nav">
+        <span></span><span></span><span></span><span class="sr-only">Abrir menu</span>
+      </button>
+      <nav id="main-nav" class="main-nav" data-menu>
+        {% if user.is_authenticated %}
+          <a href="{% url 'works:dashboard' %}">Monografia SPN</a>
+          <a href="{% url 'references:dashboard' %}" {% if request.resolver_match.url_name == 'dashboard' %}aria-current="page"{% endif %}>Painel</a>
+          <a href="{% url 'references:project_list' %}" {% if 'project' in request.resolver_match.url_name %}aria-current="page"{% endif %}>Projetos</a>
+          <a href="{% url 'references:reference_list' %}" {% if 'reference' in request.resolver_match.url_name %}aria-current="page"{% endif %}>Biblioteca</a>
+          <div class="user-menu">
+            <span class="avatar" aria-hidden="true">{{ user.first_name|default:user.username|first|upper }}</span>
+            <span class="user-name">{{ user.first_name|default:user.username }}</span>
+            <form method="post" action="{% url 'logout' %}">
+              {% csrf_token %}
+              <button class="nav-logout" type="submit">Sair</button>
+            </form>
+          </div>
+        {% else %}
+          <a href="#como-funciona">Como funciona</a>
+          <a href="{% url 'login' %}">Entrar</a>
+          <a class="button button-small button-primary" href="{% url 'works:register' %}">Criar conta</a>
+        {% endif %}
+      </nav>
+    </div>
+  </header>
+
+  {% if messages %}
+    <div class="shell messages" aria-live="polite">
+      {% for message in messages %}
+        <div class="message message-{{ message.tags|default:'info' }}">
+          <span>{{ message }}</span>
+          <button type="button" data-dismiss aria-label="Fechar aviso">×</button>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+
+  <main id="conteudo">
+    {% block content %}{% endblock %}
+  </main>
+
+  <footer class="site-footer">
+    <div class="shell footer-inner">
+      <div>
+        <a class="brand footer-brand" href="{% url 'references:home' %}">
+          <span class="brand-mark" aria-hidden="true"><span>C</span></span>
+          <span class="brand-copy"><strong>CitaRN</strong><small>Gerenciador de referências</small></span>
+        </a>
+        <p>Organize, revise e formate suas fontes com controle humano.</p>
+      </div>
+      <div class="footer-note">
+        <p><strong>Desenvolvido por:</strong> Rodrigo Niskier</p>
+        <p>Os metadados importados devem ser revisados antes da publicação.</p>
+      </div>
+    </div>
+  </footer>
+</body>
+</html>

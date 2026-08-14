@@ -1,0 +1,13 @@
+{% extends "references/base.html" %}
+{% load ref_tags %}
+{% block title %}Adicionar da biblioteca — CitaRN{% endblock %}
+{% block content %}
+<section class="page"><div class="shell">
+  <nav class="breadcrumb"><a href="{{ project.get_absolute_url }}">{{ project.name }}</a><span>/</span><span>Biblioteca</span></nav>
+  <header class="page-head"><div><p class="eyebrow">Reaproveitamento</p><h1 class="page-title">Adicionar da biblioteca</h1><p class="page-intro">Inclua neste projeto referências que você já cadastrou ou revisou.</p></div></header>
+  <div class="toolbar"><form class="search-form" method="get"><input type="search" name="q" value="{{ query }}" placeholder="Buscar por título ou DOI"><button class="button button-secondary">Buscar</button></form></div>
+  <form method="post">{% csrf_token %}
+    {% if references %}<div class="select-all-bar"><label class="check-row"><input type="checkbox" data-select-all=".existing-check"><span>Selecionar todas as exibidas</span></label><button class="button button-primary" type="submit">Adicionar selecionadas</button></div><div class="selection-list">{% for reference in references %}<div class="selection-item"><input class="existing-check" id="ref-{{ reference.pk }}" type="checkbox" name="references" value="{{ reference.pk }}"><label for="ref-{{ reference.pk }}"><strong>{{ reference.title }}</strong><small>{{ reference.authors|author_short }} · {{ reference.year|default:"sem ano" }} · {{ reference.get_reference_type_display }}</small></label></div>{% endfor %}</div><div class="form-actions" style="margin-top:15px;border:1px solid var(--line);border-radius:var(--radius)"><a class="button button-secondary" href="{{ project.get_absolute_url }}">Cancelar</a><button class="button button-primary" type="submit">Adicionar selecionadas</button></div>{% else %}<div class="card empty-state"><div class="empty-icon">B</div><h2>Nenhuma referência disponível</h2><p>{% if query %}Não encontramos itens com esse termo ou eles já pertencem ao projeto.{% else %}Todos os itens da sua biblioteca já pertencem a este projeto, ou sua biblioteca ainda está vazia.{% endif %}</p><a class="button button-primary" href="{% url 'references:import_sources' project.pk %}">Importar novas fontes</a></div>{% endif %}
+  </form>
+</div></section>
+{% endblock %}

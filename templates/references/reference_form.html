@@ -1,0 +1,37 @@
+{% extends "references/base.html" %}
+{% block title %}{{ title }} — CitaRN{% endblock %}
+{% block content %}
+<section class="page"><div class="shell">
+  <nav class="breadcrumb"><a href="{% url 'references:reference_list' %}">Biblioteca</a><span>/</span><span>{{ title }}</span></nav>
+  <header class="page-head"><div><p class="eyebrow">Metadados bibliográficos</p><h1 class="page-title">{{ title }}</h1><p class="page-intro">Preencha apenas os campos aplicáveis ao tipo de publicação.</p></div>{% if reference and reference.source_file %}<div class="head-actions"><a class="button button-secondary" href="{% url 'references:reference_file' reference.pk %}">Baixar arquivo original</a></div>{% endif %}</header>
+  {% if reference and reference.extraction_warnings %}<div class="notice notice-warning" style="margin-bottom:18px"><strong>Pontos para conferir:</strong><ul class="warning-list">{% for warning in reference.extraction_warnings %}<li>{{ warning }}</li>{% endfor %}</ul></div>{% endif %}
+  <form class="card" method="post">{% csrf_token %}{% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}{% if project %}<input type="hidden" name="project_id" value="{{ project.pk }}">{% endif %}
+    {% if form.non_field_errors %}<div class="form-section"><div class="form-errors">{{ form.non_field_errors }}</div></div>{% endif %}
+    <section class="form-section"><h2 class="form-section-title">Identificação principal</h2><p class="form-section-intro">Comece pelo tipo, título e responsabilidade autoral.</p><div class="field-grid">
+      <div class="field"><label for="{{ form.reference_type.id_for_label }}">{{ form.reference_type.label }}</label>{{ form.reference_type }}{{ form.reference_type.errors }}</div>
+      <div class="field"><label for="{{ form.year.id_for_label }}">{{ form.year.label }}</label>{{ form.year }}{{ form.year.errors }}</div>
+      <div class="field field-full"><label for="{{ form.title.id_for_label }}">{{ form.title.label }}</label>{{ form.title }}{{ form.title.errors }}</div>
+      <div class="field field-full"><label for="{{ form.subtitle.id_for_label }}">{{ form.subtitle.label }}</label>{{ form.subtitle }}{{ form.subtitle.errors }}</div>
+      <div class="field"><label for="{{ form.authors_input.id_for_label }}">{{ form.authors_input.label }}</label>{{ form.authors_input }}{{ form.authors_input.errors }}<span class="helptext">{{ form.authors_input.help_text }}</span></div>
+      <div class="field"><label for="{{ form.editors_input.id_for_label }}">{{ form.editors_input.label }}</label>{{ form.editors_input }}{{ form.editors_input.errors }}<span class="helptext">{{ form.editors_input.help_text }}</span></div>
+    </div></section>
+    <section class="form-section"><h2 class="form-section-title">Publicação</h2><p class="form-section-intro">Periódico, livro, evento, instituição e dados de edição.</p><div class="field-grid">
+      <div class="field field-full"><label for="{{ form.container_title.id_for_label }}">{{ form.container_title.label }}</label>{{ form.container_title }}{{ form.container_title.errors }}</div>
+      <div class="field"><label for="{{ form.publisher.id_for_label }}">{{ form.publisher.label }}</label>{{ form.publisher }}{{ form.publisher.errors }}</div>
+      <div class="field"><label for="{{ form.publisher_place.id_for_label }}">{{ form.publisher_place.label }}</label>{{ form.publisher_place }}{{ form.publisher_place.errors }}</div>
+      <div class="field"><label for="{{ form.edition.id_for_label }}">{{ form.edition.label }}</label>{{ form.edition }}{{ form.edition.errors }}</div>
+      <div class="field"><label for="{{ form.volume.id_for_label }}">{{ form.volume.label }}</label>{{ form.volume }}{{ form.volume.errors }}</div>
+      <div class="field"><label for="{{ form.issue.id_for_label }}">{{ form.issue.label }}</label>{{ form.issue }}{{ form.issue.errors }}</div>
+      <div class="field"><label for="{{ form.pages.id_for_label }}">{{ form.pages.label }}</label>{{ form.pages }}{{ form.pages.errors }}</div>
+      <div class="field"><label for="{{ form.language.id_for_label }}">{{ form.language.label }}</label>{{ form.language }}{{ form.language.errors }}</div>
+    </div></section>
+    <section class="form-section"><h2 class="form-section-title">Identificadores e acesso</h2><p class="form-section-intro">Use o DOI sem o prefixo “https://doi.org/”.</p><div class="field-grid">
+      <div class="field"><label for="{{ form.doi.id_for_label }}">{{ form.doi.label }}</label>{{ form.doi }}{{ form.doi.errors }}</div>
+      <div class="field"><label for="{{ form.access_date.id_for_label }}">{{ form.access_date.label }}</label>{{ form.access_date }}{{ form.access_date.errors }}</div>
+      <div class="field field-full"><label for="{{ form.url.id_for_label }}">{{ form.url.label }}</label>{{ form.url }}{{ form.url.errors }}</div>
+      <div class="field field-full"><label for="{{ form.notes.id_for_label }}">{{ form.notes.label }}</label>{{ form.notes }}{{ form.notes.errors }}<span class="field-help">Para teses, você pode registrar aqui o tipo e o programa; para outros materiais, use como memória de revisão.</span></div>
+    </div></section>
+    <div class="form-actions"><a class="button button-secondary" href="{% if next %}{{ next }}{% elif project %}{{ project.get_absolute_url }}{% else %}{% url 'references:reference_list' %}{% endif %}">Cancelar</a><button class="button button-primary" type="submit">Salvar referência</button></div>
+  </form>
+</div></section>
+{% endblock %}

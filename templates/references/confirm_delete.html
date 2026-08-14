@@ -1,0 +1,7 @@
+{% extends "references/base.html" %}
+{% block title %}Confirmar exclusão — CitaRN{% endblock %}
+{% block content %}
+<section class="page"><div class="shell"><div class="card form-card">
+  <div class="empty-state"><div class="empty-icon" style="color:var(--danger);background:var(--danger-soft)">!</div><h1>Excluir {{ object_label }}?</h1><p>Você está prestes a excluir <strong>“{{ object }}”</strong>. Esta ação não pode ser desfeita.</p>{% if object_label == 'projeto' %}<div class="notice" style="margin:0 auto 20px;max-width:570px">As referências permanecerão na sua biblioteca pessoal; apenas o agrupamento do projeto será removido.</div>{% endif %}<form method="post">{% csrf_token %}<div style="display:flex;justify-content:center;gap:10px;flex-wrap:wrap"><a class="button button-secondary" href="{{ cancel_url }}">Cancelar</a><button class="button button-danger" type="submit">Sim, excluir</button></div></form></div>
+</div></div></section>
+{% endblock %}

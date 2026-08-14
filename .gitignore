@@ -14,3 +14,4 @@ htmlcov/
 *.log
 tmp/
 artifacts/
+backups/

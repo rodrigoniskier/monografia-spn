@@ -1,0 +1,23 @@
+{% extends "references/base.html" %}
+{% block title %}Importar fontes — {{ project.name }}{% endblock %}
+{% block content %}
+<section class="page"><div class="shell">
+  <nav class="breadcrumb"><a href="{% url 'references:project_list' %}">Projetos</a><span>/</span><a href="{{ project.get_absolute_url }}">{{ project.name }}</a><span>/</span><span>Importar</span></nav>
+  <header class="page-head"><div><p class="eyebrow">Entrada de fontes</p><h1 class="page-title">Importar referências</h1><p class="page-intro">O sistema extrai metadados disponíveis e marca cada item para sua conferência.</p></div></header>
+  <form method="post" enctype="multipart/form-data">{% csrf_token %}
+    {% if form.non_field_errors %}<div class="form-errors">{{ form.non_field_errors }}</div>{% endif %}
+    <div class="grid grid-2">
+      <section class="card"><div class="card-body">
+        <div class="import-zone"><div class="import-zone-icon">↑</div><h3>Selecione seus arquivos</h3><p>Você pode enviar vários itens na mesma importação.</p>{{ form.files }}<span class="file-count" data-file-count>Nenhum arquivo selecionado</span><div class="format-strip"><span class="format-pill">PDF</span><span class="format-pill">DOCX</span><span class="format-pill">PPTX</span></div></div>
+        {{ form.files.errors }}<span class="helptext">{{ form.files.help_text }}</span>
+      </div></section>
+      <section class="card"><div class="card-body">
+        <div class="field"><label for="{{ form.urls.id_for_label }}">URLs ou DOIs</label>{{ form.urls }}{{ form.urls.errors }}<span class="helptext">{{ form.urls.help_text }}</span></div>
+        <div class="notice" style="margin-top:16px"><strong>O que funciona melhor?</strong><br>DOIs e páginas de periódicos costumam oferecer metadados mais completos. Sites genéricos podem exigir preenchimento manual.</div>
+      </div></section>
+    </div>
+    <div class="notice notice-warning" style="margin-top:18px"><strong>Importante:</strong> título, autoria e data embutidos nos arquivos podem estar incompletos. Toda referência importada entrará como “revisão necessária”.</div>
+    <div class="form-actions" style="margin-top:20px;border:1px solid var(--line);border-radius:var(--radius)"><a class="button button-secondary" href="{{ project.get_absolute_url }}">Cancelar</a><button class="button button-primary" type="submit">Importar e analisar</button></div>
+  </form>
+</div></section>
+{% endblock %}
