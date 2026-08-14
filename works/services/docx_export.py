@@ -292,18 +292,23 @@ def _add_toc(doc, entries):
         if entry["level"] > 3:
             continue
         paragraph = doc.add_paragraph()
+        paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
         paragraph.paragraph_format.first_line_indent = Cm(0)
         paragraph.paragraph_format.left_indent = Cm((entry["level"] - 1) * 0.6)
-        paragraph.paragraph_format.line_spacing = 1.5
+        paragraph.paragraph_format.line_spacing_rule = WD_LINE_SPACING.SINGLE
         paragraph.paragraph_format.space_after = Pt(0)
         paragraph.paragraph_format.tab_stops.add_tab_stop(
-            Cm(16 - ((entry["level"] - 1) * 0.6)),
+            Cm(16),
             WD_TAB_ALIGNMENT.RIGHT,
             WD_TAB_LEADER.DOTS,
         )
-        _set_run_font(paragraph.add_run(entry["label"] + "\t"))
+        _set_run_font(
+            paragraph.add_run(entry["label"] + "\t"),
+            size=SMALL_SIZE,
+            bold=entry["level"] <= 2,
+        )
         page_run = paragraph.add_run()
-        _set_run_font(page_run)
+        _set_run_font(page_run, size=SMALL_SIZE, bold=entry["level"] <= 2)
         _add_pageref(page_run, entry["bookmark"])
 
 
