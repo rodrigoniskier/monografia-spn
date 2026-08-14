@@ -1,5 +1,6 @@
 """Gera uma monografia preenchida para inspeção visual do exportador."""
 
+from datetime import date
 from pathlib import Path
 
 from django.contrib.auth.models import User
@@ -36,6 +37,14 @@ class Command(BaseCommand):
             "subtitle": "fundamentos bíblico-teológicos e implicações pastorais",
             "advisor_name": "ORIENTADOR DE TESTE",
             "advisor_title": "Rev. Dr.",
+            "year": 2025,
+            "approval_date": date(2025, 11, 30),
+            "examiner_internal_name": "EXAMINADOR INTERNO DE TESTE",
+            "examiner_internal_title": "Rev. Ms.",
+            "examiner_internal_institution": "Seminário Presbiteriano do Norte - SPN",
+            "examiner_external_name": "EXAMINADOR EXTERNO DE TESTE",
+            "examiner_external_title": "Rev. Dr.",
+            "examiner_external_institution": "Presbitério de Recife",
             "theme": "Pregação cristocêntrica",
             "delimitation": "A proclamação reformada no contexto urbano brasileiro contemporâneo.",
             "research_problem": "Como a centralidade de Cristo orienta a proclamação cristã no contexto contemporâneo?",
@@ -55,10 +64,12 @@ class Command(BaseCommand):
             "abstract_en": "This study analyzes the centrality of Christ in contemporary proclamation. It follows a qualitative bibliographical approach informed by Reformed theology and considers historical, biblical-confessional, and pastoral dimensions.",
             "keywords_en": "Christ; Preaching; Reformed theology; Church.",
             "abbreviations": "ABNT — Associação Brasileira de Normas Técnicas\nIPB — Igreja Presbiteriana do Brasil\nSPN — Seminário Presbiteriano do Norte",
+            "symbols": "§ — Seção\nα — Alfa",
             "introduction": "\n\n".join([PARAGRAPH] * 5),
             "conclusion": "\n\n".join([PARAGRAPH] * 4),
             "glossary": "Cristocêntrico — Aquilo que tem Cristo como centro.\nProclamação — Comunicação pública da mensagem cristã.",
             "appendices": "APÊNDICE A — ROTEIRO DE ANÁLISE\n\n" + PARAGRAPH,
+            "annexes": "ANEXO A — DOCUMENTO CONFESSIONAL\n\n" + PARAGRAPH,
         }
         for key, value in values.items():
             setattr(work, key, value)

@@ -198,11 +198,16 @@ class AppTestCase(TestCase):
         self.assertEqual(response["Content-Type"], "application/vnd.openxmlformats-officedocument.wordprocessingml.document")
         doc = Document(BytesIO(response.content))
         text = "\n".join(paragraph.text for paragraph in doc.paragraphs)
-        self.assertIn("SEMINÁRIO PRESBITERIANO DO NORTE - SPN", text)
-        self.assertIn("1 INTRODUÇÃO", text)
-        self.assertIn("2 FUNDAMENTOS BÍBLICO-TEOLÓGICOS", text)
-        self.assertIn("3 CONSIDERAÇÕES FINAIS", text)
+        self.assertIn("SEMINÁRIO PRESBITERIANO DO NORTE – SPN", text)
+        self.assertIn("1. INTRODUÇÃO", text)
+        self.assertIn("2. FUNDAMENTOS BÍBLICO-TEOLÓGICOS", text)
+        self.assertIn("3. CONSIDERAÇÕES FINAIS", text)
+        self.assertIn("BANCA EXAMINADORA", text)
         self.assertIn("REFERÊNCIAS", text)
+        with zipfile.ZipFile(BytesIO(response.content)) as archive:
+            self.assertTrue(
+                any(name.startswith("word/media/") for name in archive.namelist())
+            )
         first = doc.sections[0]
         self.assertAlmostEqual(first.top_margin.cm, 3, places=1)
         self.assertAlmostEqual(first.left_margin.cm, 3, places=1)

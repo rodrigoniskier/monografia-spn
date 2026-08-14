@@ -18,6 +18,7 @@ Aplicativo web para orientar alunos do Seminário Presbiteriano do Norte (SPN) d
 - importação de listas de referências ABNT em DOCX ou PDF, com deduplicação;
 - notas referenciais numéricas vinculadas ao cursor e exportadas como notas de rodapé nativas do Word;
 - exportação DOCX em A4, Times New Roman 12, margens 3/2 cm, entrelinha 1,5, paginação, sumário e estrutura acadêmica;
+- capa com marca do SPN, folha de rosto, aprovação e elementos pré-textuais calibrados pelos modelos institucionais de 2025;
 - interface responsiva e sem dependência de CDN.
 
 ## Padrão acadêmico adotado

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from io import BytesIO
+from pathlib import Path
 import re
 from typing import Iterable
 import unicodedata
@@ -28,12 +29,13 @@ from .docx_footnotes import inject_footnotes
 FONT_NAME = "Times New Roman"
 BODY_SIZE = 12
 SMALL_SIZE = 10
-MONTHS = [
-    "janeiro", "fevereiro", "março", "abril", "maio", "junho",
-    "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
-]
-
-
+SPN_LOGO_PATH = (
+    Path(__file__).resolve().parents[1]
+    / "static"
+    / "works"
+    / "img"
+    / "spn-logo.png"
+)
 def _safe(value) -> str:
     text = str(value or "")
     return "".join(char for char in text if char in "\n\t" or ord(char) >= 32).strip()
@@ -205,6 +207,27 @@ def _add_spacer(doc, points: float):
     return paragraph
 
 
+def _add_spn_logo(doc):
+    """Insere a marca usada nas capas recentes do SPN."""
+    if not SPN_LOGO_PATH.is_file():
+        return None
+    paragraph = doc.add_paragraph()
+    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    paragraph.paragraph_format.first_line_indent = Cm(0)
+    paragraph.paragraph_format.line_spacing_rule = WD_LINE_SPACING.SINGLE
+    paragraph.paragraph_format.space_after = Pt(4)
+    run = paragraph.add_run()
+    run.add_picture(str(SPN_LOGO_PATH), width=Cm(5.7))
+    return paragraph
+
+
+def _bottom_block_spacer(text: str, *, base=590, reduction_per_line=18) -> float:
+    """Aproxima o bloco da borda inferior sem estourar textos mais longos."""
+    raw_lines = _safe(text).splitlines() or [""]
+    estimated_lines = sum(max(1, (len(line) + 42) // 43) for line in raw_lines)
+    return max(300, base - max(estimated_lines - 2, 0) * reduction_per_line)
+
+
 def _page_break(doc):
     doc.add_paragraph().add_run().add_break(WD_BREAK.PAGE)
 
@@ -318,9 +341,10 @@ def _add_heading(doc, label: str, level: int, *, page_break=False, bookmark=None
 def _add_section_tree(doc, section, number_parts: list[int], bookmarks):
     number = ".".join(str(item) for item in number_parts)
     title = _strip_manual_numbering(section.title) or "Seção sem título"
+    label_number = f"{number}." if section.level == 1 else number
     _add_heading(
         doc,
-        f"{number} {title}",
+        f"{label_number} {title}",
         min(section.level, 5),
         page_break=section.level == 1,
         bookmark=bookmarks[number],
@@ -332,111 +356,202 @@ def _add_section_tree(doc, section, number_parts: list[int], bookmarks):
 
 def _approval_date(value) -> str:
     if not value:
-        return "____ de __________________ de ______"
-    return f"{value.day} de {MONTHS[value.month - 1]} de {value.year}"
+        return "____/____/______"
+    return value.strftime("%d/%m/%Y")
 
 
-def _add_examiner(doc, title: str, name: str, institution: str, role: str):
+def _display_institution(value: str) -> str:
+    text = _safe(value)
+    if text.upper() == "SEMINÁRIO PRESBITERIANO DO NORTE - SPN":
+        return "Seminário Presbiteriano do Norte – SPN"
+    return text.replace(" - ", " – ")
+
+
+def _display_location(value: str) -> str:
+    return _safe(value).replace(" - ", " – ")
+
+
+def _add_nature_block(doc, work, *, include_advisor=True):
+    nature = doc.add_paragraph()
+    nature.paragraph_format.left_indent = Cm(8)
+    nature.paragraph_format.first_line_indent = Cm(0)
+    nature.paragraph_format.line_spacing_rule = WD_LINE_SPACING.SINGLE
+    nature.paragraph_format.space_after = Pt(0)
+    nature.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+    _set_run_font(nature.add_run(_safe(work.nature_text)), size=BODY_SIZE)
+    if include_advisor and work.advisor_name:
+        adviser = doc.add_paragraph()
+        adviser.paragraph_format.left_indent = Cm(8)
+        adviser.paragraph_format.first_line_indent = Cm(0)
+        adviser.paragraph_format.line_spacing_rule = WD_LINE_SPACING.SINGLE
+        adviser.paragraph_format.space_before = Pt(34)
+        adviser.paragraph_format.space_after = Pt(0)
+        adviser.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        _set_run_font(adviser.add_run("Orientador: "), size=BODY_SIZE, bold=True)
+        _set_run_font(
+            adviser.add_run(
+                " ".join(filter(None, [_safe(work.advisor_title), _safe(work.advisor_name)]))
+            ),
+            size=BODY_SIZE,
+        )
+
+
+def _add_examiner(doc, title: str, name: str, institution: str, role: str, *, before=24):
     if not name:
         return
-    _add_spacer(doc, 20)
-    paragraph = doc.add_paragraph("__________________________________________________")
+    paragraph = doc.add_paragraph()
     paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
     paragraph.paragraph_format.first_line_indent = Cm(0)
-    for run in paragraph.runs:
-        _set_run_font(run)
-    _add_centered(doc, " ".join(filter(None, [_safe(title), _safe(name)])), after=0)
-    _add_centered(doc, role, after=0)
+    paragraph.paragraph_format.space_before = Pt(before)
+    paragraph.paragraph_format.space_after = Pt(0)
+    paragraph.paragraph_format.line_spacing_rule = WD_LINE_SPACING.SINGLE
+    p_pr = paragraph._p.get_or_add_pPr()
+    borders = OxmlElement("w:pBdr")
+    top = OxmlElement("w:top")
+    top.set(qn("w:val"), "single")
+    top.set(qn("w:sz"), "6")
+    top.set(qn("w:space"), "4")
+    top.set(qn("w:color"), "000000")
+    borders.append(top)
+    p_pr.append(borders)
+    examiner = " ".join(filter(None, [_safe(title), _safe(name)]))
+    _set_run_font(paragraph.add_run(f"{examiner} ({role})"), size=SMALL_SIZE)
     if institution:
-        _add_centered(doc, institution, after=0)
+        institution_p = _add_centered(
+            doc, _display_institution(institution), size=SMALL_SIZE, after=0
+        )
+        institution_p.paragraph_format.line_spacing_rule = WD_LINE_SPACING.SINGLE
 
 
 def _add_front_matter(doc, work, toc_entries):
-    # Capa institucional SPN: versão acadêmica sóbria, em preto, sem elementos decorativos.
+    # Capa institucional conforme o padrão visual recorrente nos trabalhos SPN de 2025.
+    _add_spn_logo(doc)
     for line in [work.institution_line_1, work.institution_line_2, work.institution_line_3, work.institution_line_4, work.course_name]:
-        _add_centered(doc, line, bold=True, size=12, after=0, uppercase=True)
-    _add_spacer(doc, 42)
+        _add_centered(
+            doc,
+            _safe(line).replace(" - ", " – "),
+            bold=False,
+            size=12,
+            after=0,
+            uppercase=True,
+        )
+    _add_spacer(doc, 67)
     _add_centered(doc, work.author_name or "NOME DO AUTOR", bold=False, uppercase=True)
-    _add_spacer(doc, 88)
+    _add_spacer(doc, 129)
     title = work.title or "TÍTULO DA MONOGRAFIA"
     _add_centered(doc, title, bold=True, uppercase=True)
     if work.subtitle:
         _add_centered(doc, work.subtitle, bold=True)
-    _add_spacer(doc, 104)
-    _add_centered(doc, work.city, uppercase=True)
+    _add_spacer(doc, 160 if work.subtitle else 220)
+    _add_centered(doc, _display_location(work.city), uppercase=True)
     _add_centered(doc, work.year)
     _page_break(doc)
 
     # Folha de rosto.
     _add_centered(doc, work.author_name or "NOME DO AUTOR", uppercase=True)
-    _add_spacer(doc, 88)
+    _add_spacer(doc, 102)
     _add_centered(doc, title, bold=True, uppercase=True)
     if work.subtitle:
         _add_centered(doc, work.subtitle, bold=True)
-    _add_spacer(doc, 42)
-    nature = doc.add_paragraph()
-    nature.paragraph_format.left_indent = Cm(7)
-    nature.paragraph_format.first_line_indent = Cm(0)
-    nature.paragraph_format.line_spacing_rule = WD_LINE_SPACING.SINGLE
-    nature.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-    _set_run_font(nature.add_run(_safe(work.nature_text)), size=10)
-    if work.advisor_name:
-        adviser = doc.add_paragraph()
-        adviser.paragraph_format.left_indent = Cm(7)
-        adviser.paragraph_format.first_line_indent = Cm(0)
-        adviser.paragraph_format.line_spacing_rule = WD_LINE_SPACING.SINGLE
-        _set_run_font(adviser.add_run(f"Orientador: {' '.join(filter(None, [work.advisor_title, work.advisor_name]))}"), size=10)
-    _add_spacer(doc, 76)
-    _add_centered(doc, work.city, uppercase=True)
+    _add_spacer(doc, 166)
+    _add_nature_block(doc, work)
+    _add_spacer(doc, 129)
+    _add_centered(doc, _display_location(work.city), uppercase=True)
     _add_centered(doc, work.year)
     _page_break(doc)
 
     # Folha de aprovação.
     _add_centered(doc, work.author_name or "NOME DO AUTOR", uppercase=True)
-    _add_spacer(doc, 42)
+    _add_spacer(doc, 62 if work.subtitle else 146)
     _add_centered(doc, title, bold=True, uppercase=True)
     if work.subtitle:
         _add_centered(doc, work.subtitle, bold=True)
-    _add_spacer(doc, 24)
-    nature = doc.add_paragraph()
-    nature.paragraph_format.left_indent = Cm(7)
-    nature.paragraph_format.first_line_indent = Cm(0)
-    nature.paragraph_format.line_spacing_rule = WD_LINE_SPACING.SINGLE
-    _set_run_font(nature.add_run(_safe(work.nature_text)), size=10)
-    date_p = doc.add_paragraph(f"Aprovada em: {_approval_date(work.approval_date)}.")
+    _add_spacer(doc, 70 if work.subtitle else 38)
+    _add_nature_block(doc, work)
+    date_p = doc.add_paragraph(f"Data de aprovação: {_approval_date(work.approval_date)}")
+    date_p.paragraph_format.left_indent = Cm(8)
     date_p.paragraph_format.first_line_indent = Cm(0)
-    date_p.paragraph_format.space_before = Pt(22)
-    _set_run_font(date_p.runs[0])
-    _add_examiner(doc, work.advisor_title, work.advisor_name, work.institution_line_4, "Orientador")
-    _add_examiner(doc, work.examiner_internal_title, work.examiner_internal_name, work.examiner_internal_institution, "Examinador interno")
-    _add_examiner(doc, work.examiner_external_title, work.examiner_external_name, work.examiner_external_institution, "Examinador externo")
+    date_p.paragraph_format.space_before = Pt(20)
+    date_p.paragraph_format.space_after = Pt(0)
+    date_p.paragraph_format.line_spacing_rule = WD_LINE_SPACING.SINGLE
+    _set_run_font(date_p.runs[0], size=BODY_SIZE)
+    _add_spacer(doc, 46)
+    _add_centered(doc, "BANCA EXAMINADORA", bold=True, after=0)
+    _add_examiner(
+        doc,
+        work.advisor_title,
+        work.advisor_name,
+        work.institution_line_4,
+        "Orientador",
+        before=28,
+    )
+    _add_examiner(
+        doc,
+        work.examiner_internal_title,
+        work.examiner_internal_name,
+        work.examiner_internal_institution,
+        "Examinador Interno",
+        before=40,
+    )
+    _add_examiner(
+        doc,
+        work.examiner_external_title,
+        work.examiner_external_name,
+        work.examiner_external_institution,
+        "Examinador Externo",
+        before=40,
+    )
 
     if work.dedication:
         _page_break(doc)
-        _add_spacer(doc, 300)
+        _add_spacer(
+            doc,
+            _bottom_block_spacer(
+                work.dedication, base=590, reduction_per_line=12
+            ),
+        )
         paragraph = doc.add_paragraph()
-        paragraph.paragraph_format.left_indent = Cm(7)
+        paragraph.paragraph_format.left_indent = Cm(8)
         paragraph.paragraph_format.first_line_indent = Cm(0)
-        paragraph.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-        _set_run_font(paragraph.add_run(_safe(work.dedication)))
+        paragraph.paragraph_format.line_spacing = 1.5
+        paragraph.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+        _set_run_font(
+            paragraph.add_run(_safe(work.dedication)), size=BODY_SIZE, italic=True
+        )
     if work.acknowledgements:
         _page_break(doc)
         _pretext_heading(doc, "Agradecimentos")
         _add_prose(doc, work.acknowledgements)
     if work.epigraph_text:
         _page_break(doc)
-        _add_spacer(doc, 280)
+        epigraph_block = "\n".join(
+            filter(None, [_safe(work.epigraph_text), _safe(work.epigraph_author)])
+        )
+        _add_spacer(
+            doc,
+            _bottom_block_spacer(
+                epigraph_block, base=590, reduction_per_line=18
+            ),
+        )
         paragraph = doc.add_paragraph()
-        paragraph.paragraph_format.left_indent = Cm(7)
+        paragraph.paragraph_format.left_indent = Cm(8)
         paragraph.paragraph_format.first_line_indent = Cm(0)
+        paragraph.paragraph_format.line_spacing = 1.5
         paragraph.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-        _set_run_font(paragraph.add_run(_safe(work.epigraph_text)), italic=True)
+        _set_run_font(
+            paragraph.add_run(_safe(work.epigraph_text)), size=BODY_SIZE, italic=True
+        )
         if work.epigraph_author:
             author = doc.add_paragraph()
-            author.paragraph_format.left_indent = Cm(7)
+            author.paragraph_format.left_indent = Cm(8)
             author.paragraph_format.first_line_indent = Cm(0)
+            author.paragraph_format.line_spacing = 1.5
             author.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-            _set_run_font(author.add_run(_safe(work.epigraph_author)))
+            _set_run_font(
+                author.add_run(_safe(work.epigraph_author)),
+                size=BODY_SIZE,
+                italic=True,
+            )
     if work.confessional_content or work.confessional_references:
         _page_break(doc)
         _pretext_heading(doc, "Base confessional")
@@ -538,8 +653,8 @@ def _add_references(
     for row in unique_rows:
         text = row["text"]
         paragraph = doc.add_paragraph()
-        paragraph.paragraph_format.first_line_indent = Cm(-1.25)
-        paragraph.paragraph_format.left_indent = Cm(1.25)
+        paragraph.paragraph_format.first_line_indent = Cm(0)
+        paragraph.paragraph_format.left_indent = Cm(0)
         paragraph.paragraph_format.line_spacing_rule = WD_LINE_SPACING.SINGLE
         paragraph.paragraph_format.space_after = Pt(12)
         if row["title"]:
@@ -572,16 +687,17 @@ def _build_navigation(work, top_sections):
     def walk(section, number_parts):
         number = ".".join(str(item) for item in number_parts)
         title = _strip_manual_numbering(section.title) or "Seção sem título"
-        label = f"{number} {title.upper() if section.level == 1 else title}"
+        label_number = f"{number}." if section.level == 1 else number
+        label = f"{label_number} {title.upper() if section.level == 1 else title}"
         add(number, label, section.level)
         for child_index, child in enumerate(section.children.all(), start=1):
             walk(child, [*number_parts, child_index])
 
-    add("1", "1 INTRODUÇÃO", 1)
+    add("1", "1. INTRODUÇÃO", 1)
     for index, section in enumerate(top_sections, start=2):
         walk(section, [index])
     conclusion_number = 2 + len(top_sections)
-    add(str(conclusion_number), f"{conclusion_number} CONSIDERAÇÕES FINAIS", 1)
+    add(str(conclusion_number), f"{conclusion_number}. CONSIDERAÇÕES FINAIS", 1)
     add("references", "REFERÊNCIAS", 1)
     if work.glossary:
         add("glossary", "GLOSSÁRIO", 1)
@@ -617,7 +733,7 @@ def build_monograph_docx(work) -> BytesIO:
     _continue_page_numbering(textual_section)
     _add_page_number(textual_section)
 
-    _add_heading(doc, "1 INTRODUÇÃO", 1, bookmark=bookmarks["1"])
+    _add_heading(doc, "1. INTRODUÇÃO", 1, bookmark=bookmarks["1"])
     _add_prose(doc, work.introduction or "[Introdução ainda não preenchida.]")
 
     for index, section in enumerate(top_sections, start=2):
@@ -626,7 +742,7 @@ def build_monograph_docx(work) -> BytesIO:
     conclusion_number = 2 + len(top_sections)
     _add_heading(
         doc,
-        f"{conclusion_number} CONSIDERAÇÕES FINAIS",
+        f"{conclusion_number}. CONSIDERAÇÕES FINAIS",
         1,
         page_break=True,
         bookmark=bookmarks[str(conclusion_number)],
