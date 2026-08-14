@@ -10,6 +10,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from docx import Document
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
 
 from .guidance import PARTS
 from .models import (
@@ -204,6 +205,19 @@ class AppTestCase(TestCase):
         self.assertIn("3. CONSIDERAÇÕES FINAIS", text)
         self.assertIn("BANCA EXAMINADORA", text)
         self.assertIn("REFERÊNCIAS", text)
+        toc_heading_index = next(
+            index
+            for index, paragraph in enumerate(doc.paragraphs)
+            if paragraph.text == "SUMÁRIO"
+        )
+        first_toc_entry = doc.paragraphs[toc_heading_index + 1]
+        self.assertEqual(first_toc_entry.alignment, WD_ALIGN_PARAGRAPH.LEFT)
+        self.assertEqual(
+            first_toc_entry.paragraph_format.line_spacing_rule,
+            WD_LINE_SPACING.SINGLE,
+        )
+        self.assertAlmostEqual(first_toc_entry.runs[0].font.size.pt, 10, places=1)
+        self.assertTrue(first_toc_entry.runs[0].bold)
         with zipfile.ZipFile(BytesIO(response.content)) as archive:
             self.assertTrue(
                 any(name.startswith("word/media/") for name in archive.namelist())
