@@ -42,7 +42,7 @@
       <button class="icon-button menu-toggle" type="button" data-sidebar-open aria-label="Abrir menu">☰</button>
       <div class="topbar-breadcrumb"><span>{{ part.group }}</span><strong>{{ part.label }}</strong></div>
       <div class="save-indicator" data-save-indicator><span></span><span data-save-text>Progresso salvo</span></div>
-      <a class="button button--quiet button--small" href="{% url 'works:workspace' work.pk 'exportar' %}">Exportar DOCX</a>
+      <a class="button button--quiet button--small" data-export-link href="{% url 'works:workspace' work.pk 'exportar' %}">Exportar DOCX</a>
       <span class="avatar" title="{{ request.user.get_full_name|default:request.user.username }}">{{ request.user.get_full_name|default:request.user.username|slice:":1"|upper }}</span>
     </header>
     <div class="editor-content">

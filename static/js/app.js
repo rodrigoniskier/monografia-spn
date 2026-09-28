@@ -63,6 +63,7 @@
   }
 
   const timers = new WeakMap();
+  const saves = new WeakMap();
   let activeSaves = 0;
 
   function globalSaveState(state, label) {
@@ -79,6 +80,11 @@
     if (!root || !input) return null;
     const timer = timers.get(input);
     if (timer) window.clearTimeout(timer);
+    timers.delete(input);
+    // Never let two requests for the same field race each other. A later edit
+    // must be sent only after the earlier response has been acknowledged.
+    if (saves.has(input)) return saves.get(input);
+    if (input.value === input.dataset.savedValue) return null;
     const field = input.dataset.field || input.dataset.sectionField;
     if (!field) return null;
     let url = root.dataset.autosaveUrl;
@@ -86,25 +92,34 @@
       const card = input.closest("[data-section-card]");
       url = `/api/monografias/${root.dataset.workId}/secoes/${card.dataset.sectionId}/`;
     }
-    activeSaves += 1;
-    globalSaveState("saving", "Salvando…");
-    setFieldState(input, "saving", "Salvando…");
-    try {
-      const data = await apiFetch(url, { method: "POST", body: JSON.stringify({ field, value: input.value }) });
-      input.dataset.savedValue = input.value;
-      applySequenceMap(data.sequence_map);
-      setFieldState(input, "saved", "Salvo");
-      updateCompletion(data.completion);
-      return data;
-    } catch (error) {
-      setFieldState(input, "error", "Não salvo");
-      globalSaveState("error", "Falha ao salvar");
-      toast(error.message, "error");
-      throw error;
-    } finally {
-      activeSaves = Math.max(0, activeSaves - 1);
-      if (!activeSaves && !qs("[data-field-state].is-error")) globalSaveState("saved", "Progresso salvo");
-    }
+    const pending = (async () => {
+      activeSaves += 1;
+      globalSaveState("saving", "Salvando…");
+      try {
+        let data = null;
+        while (input.value !== input.dataset.savedValue) {
+          const submittedValue = input.value;
+          setFieldState(input, "saving", "Salvando…");
+          data = await apiFetch(url, { method: "POST", body: JSON.stringify({ field, value: submittedValue }) });
+          input.dataset.savedValue = submittedValue;
+          applySequenceMap(data.sequence_map);
+          updateCompletion(data.completion);
+        }
+        setFieldState(input, "saved", "Salvo");
+        return data;
+      } catch (error) {
+        setFieldState(input, "error", "Não salvo");
+        globalSaveState("error", "Falha ao salvar");
+        toast(error.message, "error");
+        throw error;
+      } finally {
+        saves.delete(input);
+        activeSaves = Math.max(0, activeSaves - 1);
+        if (!activeSaves && !qsa("[data-autosave], [data-section-field]").some((item) => item.value !== item.dataset.savedValue)) globalSaveState("saved", "Progresso salvo");
+      }
+    })();
+    saves.set(input, pending);
+    return pending;
   }
 
   function scheduleSave(input) {
@@ -128,6 +143,19 @@
       const dirty = qsa("[data-autosave], [data-section-field], [data-citation-note-input]").some((input) => input.value !== input.dataset.savedValue);
       if (dirty || activeSaves) { event.preventDefault(); event.returnValue = ""; }
     });
+    // The export link is navigation; wait for the current page's edits to be
+    // confirmed before the server builds its DOCX from the database.
+    qsa("[data-export-link]").forEach((link) => link.addEventListener("click", async (event) => {
+      event.preventDefault();
+      if (link.dataset.exporting) return;
+      link.dataset.exporting = "true";
+      try {
+        await Promise.all(qsa("[data-autosave], [data-section-field]").map((input) => saveElement(input)));
+        window.location.href = link.href;
+      } catch (_) {
+        toast("O texto ainda não foi salvo. Tente novamente antes de exportar.", "error");
+      } finally { delete link.dataset.exporting; }
+    }));
   }
 
   const citationNotes = new Map();
