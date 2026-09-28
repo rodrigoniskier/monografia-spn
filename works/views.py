@@ -3,8 +3,10 @@ from __future__ import annotations
 from datetime import date
 import json
 import logging
+from functools import wraps
 from pathlib import Path
 import re
+import time
 from types import SimpleNamespace
 
 from django.contrib import messages
@@ -13,7 +15,7 @@ from django.contrib.auth.decorators import login_required
 from django.core.cache import cache
 from django.core import signing
 from django.core.exceptions import ValidationError
-from django.db import IntegrityError, transaction
+from django.db import IntegrityError, OperationalError, transaction
 from django.db.models import Max
 from django.http import Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -60,6 +62,25 @@ FOOTNOTE_TOKEN_RE = re.compile(
     r"\[\[FN:([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\]\]",
     re.I,
 )
+
+
+def retry_locked_database(view):
+    """Retry the whole SQLite transaction after a concurrent writer wins.
+
+    A deferred SQLite transaction can fail while upgrading a read lock to a
+    write lock; the configured busy timeout does not always help that case.
+    """
+    @wraps(view)
+    def wrapped(request, *args, **kwargs):
+        for attempt in range(3):
+            try:
+                return view(request, *args, **kwargs)
+            except OperationalError as exc:
+                if "database is locked" not in str(exc).lower() or attempt == 2:
+                    raise
+                logger.warning("Autosave database lock; retry %s/2", attempt + 1)
+                time.sleep(0.1 * (attempt + 1))
+    return wrapped
 
 
 def _json_body(request):
@@ -375,6 +396,7 @@ def workspace(request, pk, part_slug):
 
 @login_required
 @require_POST
+@retry_locked_database
 @transaction.atomic
 def autosave(request, pk):
     work = _owned_work(request, pk)
@@ -438,6 +460,7 @@ def add_section(request, pk):
 
 @login_required
 @require_POST
+@retry_locked_database
 @transaction.atomic
 def update_section(request, pk, section_id):
     work = _owned_work(request, pk)
