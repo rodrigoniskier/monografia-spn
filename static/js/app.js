@@ -64,6 +64,10 @@
 
   const timers = new WeakMap();
   const saves = new WeakMap();
+  const resaveAfterCurrent = new WeakSet();
+  const citationNoteTimers = new WeakMap();
+  const citationNoteSaves = new WeakMap();
+  const citationNoteSaveFns = new WeakMap();
   let activeSaves = 0;
 
   function globalSaveState(state, label) {
@@ -75,14 +79,33 @@
     if (text) text.textContent = label;
   }
 
+  function hasPendingChanges() {
+    return qsa("[data-autosave], [data-section-field], [data-citation-note-input]")
+      .some((input) => input.value !== input.dataset.savedValue);
+  }
+
+  function markSavedIfSettled() {
+    if (!activeSaves && !hasPendingChanges()) globalSaveState("saved", "Progresso salvo");
+  }
+
+  async function flushPendingSaves() {
+    const fieldSaves = qsa("[data-autosave], [data-section-field]").map((input) => saveElement(input));
+    const noteSaves = qsa("[data-citation-note-input]").map((input) => {
+      const save = citationNoteSaveFns.get(input);
+      return save ? save() : null;
+    });
+    await Promise.all([...fieldSaves, ...noteSaves]);
+    if (activeSaves || hasPendingChanges()) throw new Error("Existem alterações ainda não salvas.");
+  }
+
   async function saveElement(input) {
     const root = qs("[data-editor-root]");
     if (!root || !input) return null;
     const timer = timers.get(input);
     if (timer) window.clearTimeout(timer);
     timers.delete(input);
-    // Never let two requests for the same field race each other. A later edit
-    // must be sent only after the earlier response has been acknowledged.
+    // Never let two requests for the same field race each other. The request
+    // already in flight owns the field until it acknowledges every newer edit.
     if (saves.has(input)) return saves.get(input);
     if (input.value === input.dataset.savedValue) return null;
     const field = input.dataset.field || input.dataset.sectionField;
@@ -95,6 +118,7 @@
     const pending = (async () => {
       activeSaves += 1;
       globalSaveState("saving", "Salvando…");
+      let failed = false;
       try {
         let data = null;
         while (input.value !== input.dataset.savedValue) {
@@ -108,14 +132,27 @@
         setFieldState(input, "saved", "Salvo");
         return data;
       } catch (error) {
+        failed = true;
         setFieldState(input, "error", "Não salvo");
         globalSaveState("error", "Falha ao salvar");
         toast(error.message, "error");
         throw error;
       } finally {
+        const retryLatest = failed && resaveAfterCurrent.has(input) && input.value !== input.dataset.savedValue;
+        resaveAfterCurrent.delete(input);
         saves.delete(input);
         activeSaves = Math.max(0, activeSaves - 1);
-        if (!activeSaves && !qsa("[data-autosave], [data-section-field]").some((item) => item.value !== item.dataset.savedValue)) globalSaveState("saved", "Progresso salvo");
+        if (retryLatest) {
+          setFieldState(input, "saving", "Pendente");
+          globalSaveState("saving", "Alterações pendentes");
+          const retryTimer = window.setTimeout(() => {
+            timers.delete(input);
+            saveElement(input).catch(() => {});
+          }, 350);
+          timers.set(input, retryTimer);
+        } else {
+          markSavedIfSettled();
+        }
       }
     })();
     saves.set(input, pending);
@@ -127,7 +164,15 @@
     setFieldState(input, "saving", "Alterado");
     const previous = timers.get(input);
     if (previous) window.clearTimeout(previous);
-    timers.set(input, window.setTimeout(() => saveElement(input).catch(() => {}), 850));
+    timers.delete(input);
+    if (saves.has(input)) {
+      resaveAfterCurrent.add(input);
+      return;
+    }
+    timers.set(input, window.setTimeout(() => {
+      timers.delete(input);
+      saveElement(input).catch(() => {});
+    }, 850));
   }
 
   function initAutosave() {
@@ -140,26 +185,24 @@
       });
     });
     window.addEventListener("beforeunload", (event) => {
-      const dirty = qsa("[data-autosave], [data-section-field], [data-citation-note-input]").some((input) => input.value !== input.dataset.savedValue);
-      if (dirty || activeSaves) { event.preventDefault(); event.returnValue = ""; }
+      if (hasPendingChanges() || activeSaves) { event.preventDefault(); event.returnValue = ""; }
     });
-    // The export link is navigation; wait for the current page's edits to be
-    // confirmed before the server builds its DOCX from the database.
+    // Export is allowed only after every text field and citation note has been
+    // acknowledged by the backend. A failed save leaves the browser state dirty.
     qsa("[data-export-link]").forEach((link) => link.addEventListener("click", async (event) => {
       event.preventDefault();
       if (link.dataset.exporting) return;
       link.dataset.exporting = "true";
       try {
-        await Promise.all(qsa("[data-autosave], [data-section-field]").map((input) => saveElement(input)));
+        await flushPendingSaves();
         window.location.href = link.href;
       } catch (_) {
-        toast("O texto ainda não foi salvo. Tente novamente antes de exportar.", "error");
+        toast("Existem alterações ainda não salvas. Tente novamente antes de exportar.", "error");
       } finally { delete link.dataset.exporting; }
     }));
   }
 
   const citationNotes = new Map();
-  const citationNoteTimers = new WeakMap();
   let citationOptions = [];
   let activeCitation = null;
   const selectionByEditor = new WeakMap();
@@ -300,23 +343,34 @@
     const panel = qs(`[data-citation-notes][data-source-id="${CSS.escape(source.id)}"]`);
     if (!panel) return;
     const list = qs("[data-citation-note-list]", panel);
+    const existingRows = new Map(
+      qsa("[data-citation-note-id]", list).map((row) => [row.dataset.citationNoteId, row]),
+    );
     const markers = [];
     const seen = new Set();
     for (const match of source.value.matchAll(footnoteRegex())) {
       const marker = match[1].toLowerCase();
       if (!seen.has(marker)) { seen.add(marker); markers.push(marker); }
     }
-    list.replaceChildren();
     if (!markers.length) {
+      list.replaceChildren();
       const empty = document.createElement("p");
       empty.className = "citation-notes__empty";
       empty.textContent = "Nenhuma referência inserida neste conteúdo.";
       list.appendChild(empty);
       return;
     }
+    const rows = [];
     markers.forEach((marker) => {
       const note = noteForMarker(marker);
       if (!note) return;
+      const preserved = existingRows.get(String(note.id));
+      if (preserved) {
+        const number = qs("sup", preserved);
+        if (number) number.textContent = String(note.sequence);
+        rows.push(preserved);
+        return;
+      }
       const row = document.createElement("article");
       row.className = "citation-note-row";
       row.dataset.citationNoteId = note.id;
@@ -328,41 +382,55 @@
       text.dataset.savedValue = note.text;
       text.dataset.citationNoteInput = "";
       text.setAttribute("aria-label", `Texto da nota ${note.sequence}`);
-      const saveNoteText = async () => {
-        if (text.dataset.saving === "true") return;
+      const saveNoteText = () => {
+        if (citationNoteSaves.has(text)) return citationNoteSaves.get(text);
         const value = text.value.trim();
-        if (!value || value === text.dataset.savedValue) return;
+        if (!value || value === text.dataset.savedValue) return null;
         const timer = citationNoteTimers.get(text);
         if (timer) window.clearTimeout(timer);
-        text.dataset.saving = "true";
+        citationNoteTimers.delete(text);
         text.disabled = true;
-        activeSaves += 1;
-        globalSaveState("saving", "Salvando nota…");
-        let failed = false;
-        try {
-          const response = await apiFetch(note.update_url, { method: "POST", body: JSON.stringify({ text: value }) });
-          Object.assign(note, response.note);
-          citationNotes.set(marker, note);
-          text.dataset.savedValue = note.text;
-          renderCitationEditor(source);
-        } catch (error) {
-          failed = true;
-          globalSaveState("error", "Falha ao salvar nota");
-          toast(error.message, "error");
-        } finally {
-          delete text.dataset.saving;
-          text.disabled = false;
-          activeSaves = Math.max(0, activeSaves - 1);
-          if (!activeSaves && !failed) globalSaveState("saved", "Progresso salvo");
-        }
+        const pending = (async () => {
+          activeSaves += 1;
+          globalSaveState("saving", "Salvando nota…");
+          let failed = false;
+          try {
+            const response = await apiFetch(note.update_url, { method: "POST", body: JSON.stringify({ text: value }) });
+            Object.assign(note, response.note);
+            citationNotes.set(marker, note);
+            text.dataset.savedValue = note.text;
+            renderCitationEditor(source);
+            return response;
+          } catch (error) {
+            failed = true;
+            globalSaveState("error", "Falha ao salvar nota");
+            toast(error.message, "error");
+            throw error;
+          } finally {
+            citationNoteSaves.delete(text);
+            text.disabled = false;
+            activeSaves = Math.max(0, activeSaves - 1);
+            if (!failed) markSavedIfSettled();
+          }
+        })();
+        citationNoteSaves.set(text, pending);
+        return pending;
       };
+      citationNoteSaveFns.set(text, saveNoteText);
       text.addEventListener("input", () => {
         globalSaveState("saving", "Nota alterada");
         const prior = citationNoteTimers.get(text);
         if (prior) window.clearTimeout(prior);
-        citationNoteTimers.set(text, window.setTimeout(() => saveNoteText(), 850));
+        citationNoteTimers.set(text, window.setTimeout(() => {
+          citationNoteTimers.delete(text);
+          const save = saveNoteText();
+          if (save) save.catch(() => {});
+        }, 850));
       });
-      text.addEventListener("blur", () => saveNoteText());
+      text.addEventListener("blur", () => {
+        const save = saveNoteText();
+        if (save) save.catch(() => {});
+      });
       const remove = document.createElement("button");
       remove.type = "button";
       remove.className = "citation-note-row__remove";
@@ -384,8 +452,9 @@
         } catch (error) { remove.disabled = false; toast(error.message, "error"); }
       });
       row.append(number, text, remove);
-      list.appendChild(row);
+      rows.push(row);
     });
+    list.replaceChildren(...rows);
   }
 
   function closeReferencePicker() {
