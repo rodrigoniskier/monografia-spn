@@ -155,6 +155,34 @@ class AppTestCase(TestCase):
         self.work.refresh_from_db()
         self.assertEqual(self.work.theme, "Texto preservado após concorrência")
 
+    def test_citation_note_update_recovers_from_transient_sqlite_write_lock(self):
+        note = CitationNote.objects.create(
+            monograph=self.work,
+            target_key="monograph:introduction",
+            sequence=1,
+            reference_text="Nota antiga.",
+        )
+        self.work.introduction += note.token
+        self.work.save(update_fields=["introduction", "updated_at"])
+        original_save = CitationNote.save
+        attempts = []
+
+        def lock_once(instance, *args, **kwargs):
+            attempts.append(1)
+            if len(attempts) == 1:
+                raise OperationalError("database is locked")
+            return original_save(instance, *args, **kwargs)
+
+        with patch.object(CitationNote, "save", lock_once), patch("works.views.time.sleep"):
+            response = self.post_json(
+                reverse("works:update_citation_note", args=[self.work.pk, note.pk]),
+                {"text": "Nota persistida após a retomada da escrita."},
+            )
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(attempts), 2)
+        note.refresh_from_db()
+        self.assertEqual(note.reference_text, "Nota persistida após a retomada da escrita.")
+
     def test_sections_support_hierarchy_and_protect_ownership(self):
         add_url = reverse("works:add_section", args=[self.work.pk])
         response = self.post_json(add_url, {"parent_id": self.section.pk, "title": "Exegese do texto"})
@@ -252,6 +280,29 @@ class AppTestCase(TestCase):
         self.assertAlmostEqual(first.top_margin.cm, 3, places=1)
         self.assertAlmostEqual(first.left_margin.cm, 3, places=1)
         self.assertAlmostEqual(first.right_margin.cm, 2, places=1)
+
+    def test_docx_export_uses_latest_persisted_citation_note(self):
+        note = CitationNote.objects.create(
+            monograph=self.work,
+            target_key="monograph:introduction",
+            sequence=1,
+            reference_text="Versão antiga da nota.",
+        )
+        self.work.introduction += note.token
+        self.work.save(update_fields=["introduction", "updated_at"])
+
+        updated = self.post_json(
+            reverse("works:update_citation_note", args=[self.work.pk, note.pk]),
+            {"text": "Versão mais recente confirmada no servidor."},
+        )
+        self.assertEqual(updated.status_code, 200)
+
+        response = self.client.get(reverse("works:export_docx", args=[self.work.pk]))
+        self.assertEqual(response.status_code, 200)
+        with zipfile.ZipFile(BytesIO(response.content)) as archive:
+            footnotes_xml = archive.read("word/footnotes.xml").decode("utf-8")
+        self.assertIn("Versão mais recente confirmada no servidor.", footnotes_xml)
+        self.assertNotIn("Versão antiga da nota.", footnotes_xml)
 
     def test_docx_reference_list_import_and_deduplication(self):
         source = Document()

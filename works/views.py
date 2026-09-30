@@ -78,7 +78,7 @@ def retry_locked_database(view):
             except OperationalError as exc:
                 if "database is locked" not in str(exc).lower() or attempt == 2:
                     raise
-                logger.warning("Autosave database lock; retry %s/2", attempt + 1)
+                logger.warning("Database write lock; retry %s/2", attempt + 1)
                 time.sleep(0.1 * (attempt + 1))
     return wrapped
 
@@ -755,6 +755,7 @@ def delete_reference_entry(request, pk, reference_id):
 
 @login_required
 @require_POST
+@retry_locked_database
 @transaction.atomic
 def create_citation_note(request, pk):
     work = get_object_or_404(
@@ -833,6 +834,8 @@ def create_citation_note(request, pk):
 
 @login_required
 @require_POST
+@retry_locked_database
+@transaction.atomic
 def update_citation_note(request, pk, note_id):
     work = _owned_work(request, pk)
     note = get_object_or_404(CitationNote, pk=note_id, monograph=work)
@@ -846,13 +849,15 @@ def update_citation_note(request, pk, note_id):
         note.reference_text = text
         note.full_clean()
         note.save(update_fields=["reference_text", "updated_at"])
-        return JsonResponse({"ok": True, "note": _citation_note_json(note)})
+        Monograph.objects.filter(pk=work.pk).update(updated_at=note.updated_at)
+        return JsonResponse({"ok": True, "note": _citation_note_json(note), "saved_at": note.updated_at.isoformat()})
     except ValidationError as exc:
         return _json_error(str(exc))
 
 
 @login_required
 @require_POST
+@retry_locked_database
 @transaction.atomic
 def delete_citation_note(request, pk, note_id):
     work = get_object_or_404(
