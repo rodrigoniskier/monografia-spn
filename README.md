@@ -2,6 +2,18 @@
 
 Aplicativo web para orientar alunos do Seminário Presbiteriano do Norte (SPN) desde a delimitação do tema até a geração da monografia em DOCX. Cada usuário possui conta própria, progresso salvo, roteiro por etapa, revisão acadêmica assistida pela Gemini API e pesquisa bibliográfica em catálogos reais.
 
+## Problema, público e resultado
+
+**Problema.** Escrever a monografia exige seguir o padrão institucional etapa por etapa, da delimitação do tema à formatação final.
+
+**Para quem.** Alunos do Seminário Presbiteriano do Norte (SPN) em fase de monografia.
+
+**O que entrega.** Roteiro por etapa com progresso salvo por usuário, revisão acadêmica assistida pela Gemini API (com aceite explícito do autor), pesquisa em Crossref, OpenAlex, Google Books e Open Library e geração da monografia em DOCX.
+
+**Tecnologias.** Python, Django 5.2, SQLite, Gemini API, python-docx.
+
+**Qualidade e evidências.** 37 funções de teste automatizadas. Este repositório não tem workflow de CI.
+
 ## O que já está implementado
 
 - cadastro, login e isolamento dos trabalhos por usuário;
